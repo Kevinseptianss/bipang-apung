@@ -1,5 +1,6 @@
 import { Roboto, Roboto_Mono } from "next/font/google";
 import "./globals.css";
+import { Analytics } from "@vercel/analytics/react"
 
 const roboto = Roboto({
   weight: '400', // You can specify the weight you need
@@ -45,6 +46,7 @@ export default function RootLayout({ children }) {
         className={`${roboto.variable} ${robotoMono.variable} antialiased`}
       >
         {children}
+        <Analytics />
       </body>
     </html>
   );
