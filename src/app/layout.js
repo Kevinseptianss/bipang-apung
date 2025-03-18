@@ -19,7 +19,7 @@ export const metadata = {
   openGraph: {
     title: "Babi Panggang Apung",
     description: "Babi Panggang Apung adalah hidangan khas Chinese yang gurih dan kaya rempah, menggunakan bumbu Ngohiong. Dipanggang hingga kulitnya crispy kriuk dan bagian dalamnya juicy, hidangan ini cocok disajikan dengan nasi putih atau sayuran tumis. Pilihan sempurna untuk acara keluarga atau perayaan khas Chinese.",
-    url: "https://yourwebsite.com", // Replace with your website URL
+    url: "https://bipangapung.vercel.app", // Replace with your website URL
     type: "website",
     images: [
       {
