@@ -132,7 +132,7 @@ export default function PaymentStatusPage() {
                 {orderDetails.items.map((item, index) => (
                   <div key={index} className="flex gap-4 items-start">
                     <div className="w-16 h-16 bg-gray-700 rounded-md overflow-hidden">
-                      <img 
+                      <Image 
                         src={item.image} 
                         alt={item.name} 
                         className="w-full h-full object-cover"
