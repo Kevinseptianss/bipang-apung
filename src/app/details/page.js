@@ -45,11 +45,12 @@ export default function Details() {
       if (response.data.success) {
         setSuccess(true);
         console.log(response.data);
-        // Clear cart after successful transaction
         localStorage.removeItem("cart");
 
         if(response.data.paymentUrl) {
           window.location.href = response.data.paymentUrl;
+        } else {
+            window.location.href = "/";
         }
       } else {
         setError(response.data.message || "Failed to create transaction");

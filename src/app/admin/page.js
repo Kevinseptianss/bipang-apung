@@ -155,7 +155,9 @@ export default function Admin() {
             </div>
 
             <div className="mb-6 bg-gray-800 p-4 rounded-lg">
-              <h2 className="text-lg font-bold text-white mb-4">Filter Orders</h2>
+              <h2 className="text-lg font-bold text-white mb-4">
+                Filter Orders
+              </h2>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-1">
@@ -250,7 +252,14 @@ export default function Admin() {
                     >
                       <div className="flex justify-between items-start mb-4">
                         <div>
-                          <h2 className="text-xl font-bold text-white">
+                          <h2
+                            className="text-xl font-bold text-white cursor-pointer hover:text-blue-400 transition-colors"
+                            onClick={() => {
+                              const message = `Terima kasih telah berbelanja di Babi Panggang Apung \nPesanan Anda sedang diproses. Order ID: ${order.order_id} \nhttps://bipangapung.vercel.app/cekorder/${order.order_id}`;
+                              navigator.clipboard.writeText(message);
+                              alert("Message copied to clipboard!");
+                            }}
+                          >
                             Order #{order.order_id}
                           </h2>
                           <p className="text-gray-300">
