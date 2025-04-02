@@ -34,7 +34,7 @@ export async function POST(request) {
     const message = `Terima kasih telah berbelanja di Babi Panggang Apung \nPesanan Anda sedang diproses. Order ID: ${order_id} \nhttps://bipangapung.vercel.app/cekorder/${order_id}`;
 
     // For COD orders, just store in Firebase
-    if (paymentMethod === "COD (Cash on Destination)") {
+    if (paymentMethod === "COD (Cash on Destination)" || paymentMethod === "Transfer") {
       await db.collection("orders").doc(order_id).set({
         order_id,
         amount: totalAmount,
@@ -57,6 +57,7 @@ export async function POST(request) {
       return Response.json({
         success: true,
         message: "COD order created successfully",
+        order_id: order_id,
       });
     }
 

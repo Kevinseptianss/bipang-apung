@@ -49,7 +49,7 @@ export default function PaymentStatusPage() {
           <div className="absolute top-0 left-0 w-full h-full bg-black opacity-80" />
         </div>
         <div className="relative flex flex-col items-center justify-center text-base p-10 text-center">
-          <p>Memeriksa status pembayaran...</p>
+          <p>Memeriksa status order...</p>
         </div>
       </div>
     );

@@ -6,7 +6,7 @@ import bg from "@/assets/bg.png";
 
 export default function Details() {
   const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setDate(tomorrow.getDate());
   const tomorrowFormatted = tomorrow.toISOString().split("T")[0];
 
   const [formData, setFormData] = useState({
@@ -15,7 +15,7 @@ export default function Details() {
     phone: "",
     note: "",
     date: tomorrowFormatted, // Set default to tomorrow
-    deliveryMethod: "Dikirim kurir flat Rp 12.000",
+    deliveryMethod: "Di Ambil di Toko",
     paymentMethod: "Pembayaran Otomatis",
   });
 
@@ -47,10 +47,10 @@ export default function Details() {
         console.log(response.data);
         localStorage.removeItem("cart");
 
-        if(response.data.paymentUrl) {
+        if (response.data.paymentUrl) {
           window.location.href = response.data.paymentUrl;
         } else {
-            window.location.href = "/";
+          window.location.href = "/cekorder/" + response.data.order_id;
         }
       } else {
         setError(response.data.message || "Failed to create transaction");
@@ -166,6 +166,7 @@ export default function Details() {
               className="border-1 border-white rounded-lg p-2 w-full bg-transparent text-white"
             >
               <option value="Pembayaran Otomatis">Pembayaran Otomatis</option>
+              <option value="Transfer">Transfer</option>
               <option value="COD (Cash on Destination)">
                 COD (Cash on Destination)
               </option>
