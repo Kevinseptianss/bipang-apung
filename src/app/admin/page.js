@@ -125,6 +125,10 @@ export default function Admin() {
       }).format(amount);
     };
 
+    const calculateTotalSales = () => {
+      return orders.reduce((total, order) => total + order.amount, 0);
+    };
+
     return (
       <div className="flex flex-col min-h-screen">
         <div className="absolute inset-0 -z-10">
@@ -233,6 +237,41 @@ export default function Admin() {
                 {error}
               </div>
             )}
+
+            <div className="mb-6 bg-gray-800 p-4 rounded-lg">
+              <div className="flex justify-between items-center">
+                <h2 className="text-lg font-bold text-white">Sales Summary</h2>
+                <div className="text-xl font-bold text-white">
+                  Total Orders: {orders.length}
+                </div>
+              </div>
+              <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-blue-900 p-4 rounded-lg">
+                  <h3 className="text-sm font-medium text-blue-200">
+                    Total Sales
+                  </h3>
+                  <p className="text-2xl font-bold text-white">
+                    {formatCurrency(calculateTotalSales())}
+                  </p>
+                </div>
+                <div className="bg-green-900 p-4 rounded-lg">
+                  <h3 className="text-sm font-medium text-green-200">
+                    Completed Orders
+                  </h3>
+                  <p className="text-2xl font-bold text-white">
+                    {orders.filter((o) => o.status === "completed").length}
+                  </p>
+                </div>
+                <div className="bg-yellow-900 p-4 rounded-lg">
+                  <h3 className="text-sm font-medium text-yellow-200">
+                    Processing Orders
+                  </h3>
+                  <p className="text-2xl font-bold text-white">
+                    {orders.filter((o) => o.status === "processing").length}
+                  </p>
+                </div>
+              </div>
+            </div>
 
             {isLoadingOrders ? (
               <div className="text-white text-center py-8">
