@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import axios from "axios";
 import Image from "next/image";
+import Head from "next/head";
 import logo from "@/assets/logo.png";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
@@ -59,6 +60,10 @@ export default function Admin() {
   const [statsFilter, setStatsFilter] = useState("current_month"); // "all" or "current_month" or "custom_month"
   const [selectedMonth, setSelectedMonth] = useState(new Date()); // For month/year picker
   const [showMonthPicker, setShowMonthPicker] = useState(false);
+  
+  // PWA Install Prompt
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [showInstallButton, setShowInstallButton] = useState(false);
 
   // Close month picker when clicking outside
   useEffect(() => {
@@ -115,6 +120,39 @@ export default function Admin() {
       }
     };
   }, [fetchOrders, autoRefreshEnabled]);
+
+  // PWA Service Worker Registration
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js')
+        .then((registration) => {
+          console.log('SW registered: ', registration);
+        })
+        .catch((registrationError) => {
+          console.log('SW registration failed: ', registrationError);
+        });
+    }
+
+    // PWA Install Prompt
+    const handleBeforeInstallPrompt = (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setShowInstallButton(true);
+    };
+
+    const handleAppInstalled = () => {
+      setDeferredPrompt(null);
+      setShowInstallButton(false);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleAppInstalled);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
+  }, []);
 
   // Enhanced filtering logic
   const filteredOrders = useMemo(() => {
@@ -398,6 +436,18 @@ export default function Admin() {
       return calculateStats();
     }, [calculateStats]);
     
+    const handleInstallApp = async () => {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === 'accepted') {
+          console.log('User accepted the install prompt');
+        }
+        setDeferredPrompt(null);
+        setShowInstallButton(false);
+      }
+    };
+    
     const getCurrentPeriodText = () => {
       const monthNames = [
         "Januari", "Februari", "Maret", "April", "Mei", "Juni",
@@ -455,7 +505,63 @@ export default function Admin() {
 
     return (
       <>
+        <Head>
+          <title>Apung Admin</title>
+          <meta name="application-name" content="Apung Admin" />
+          <meta name="apple-mobile-web-app-capable" content="yes" />
+          <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+          <meta name="apple-mobile-web-app-title" content="Apung Admin" />
+          <meta name="mobile-web-app-capable" content="yes" />
+          <meta name="theme-color" content="#1F2937" />
+          <meta name="background-color" content="#111827" />
+          <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0, viewport-fit=cover" />
+          <meta name="format-detection" content="telephone=no" />
+          <meta name="apple-touch-fullscreen" content="yes" />
+          <link rel="manifest" href="/manifest.json" />
+          <link rel="apple-touch-icon" href="/logo.png" />
+          <link rel="apple-touch-startup-image" href="/logo.png" />
+          <link rel="icon" href="/logo.png" />
+        </Head>
+        
         <style jsx global>{`
+          /* PWA and iOS Full Screen Support */
+          @supports(padding: max(0px)) {
+            .ios-safe-area {
+              padding-top: max(env(safe-area-inset-top), 0px);
+              padding-bottom: max(env(safe-area-inset-bottom), 0px);
+              padding-left: max(env(safe-area-inset-left), 0px);
+              padding-right: max(env(safe-area-inset-right), 0px);
+            }
+          }
+          
+          /* Hide scrollbars in standalone mode */
+          @media all and (display-mode: standalone) {
+            body {
+              -webkit-user-select: none;
+              -webkit-touch-callout: none;
+              -webkit-tap-highlight-color: transparent;
+            }
+            
+            ::-webkit-scrollbar {
+              width: 0px;
+              background: transparent;
+            }
+          }
+          
+          /* Prevent bounce scrolling on iOS */
+          body {
+            position: fixed;
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+          }
+          
+          #__next {
+            height: 100vh;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+          }
+          
           .datepicker-dark-theme .react-datepicker {
             background-color: #374151 !important;
             border: 1px solid #4B5563 !important;
@@ -531,7 +637,7 @@ export default function Admin() {
           }
         `}</style>
         
-        <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-800">
+        <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-800 ios-safe-area">
         {/* Modern Header */}
         <div className="sticky top-0 z-40 bg-gray-800/95 backdrop-blur-md shadow-sm border-b border-gray-700">
           <div className="px-4 py-3">
@@ -574,6 +680,17 @@ export default function Admin() {
                 >
                   <FaSync className={`w-4 h-4 ${autoRefreshEnabled ? '' : 'opacity-50'}`} />
                 </button>
+                
+                {/* PWA Install Button */}
+                {showInstallButton && (
+                  <button
+                    onClick={handleInstallApp}
+                    className="p-2 rounded-full bg-purple-600 hover:bg-purple-700 text-white shadow-lg transition-all active:scale-95"
+                    title="Install App"
+                  >
+                    <FaDownload className="w-4 h-4" />
+                  </button>
+                )}
                 
                 <button
                   onClick={() => {
