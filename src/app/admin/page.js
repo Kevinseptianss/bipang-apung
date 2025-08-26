@@ -526,40 +526,27 @@ export default function Admin() {
         <style jsx global>{`
           /* PWA and iOS Full Screen Support */
           @supports(padding: max(0px)) {
-            .ios-safe-area {
+            .ios-safe-area-top {
               padding-top: max(env(safe-area-inset-top), 0px);
+            }
+            .ios-safe-area-bottom {
               padding-bottom: max(env(safe-area-inset-bottom), 0px);
+            }
+            .ios-safe-area-left {
               padding-left: max(env(safe-area-inset-left), 0px);
+            }
+            .ios-safe-area-right {
               padding-right: max(env(safe-area-inset-right), 0px);
             }
           }
           
-          /* Hide scrollbars in standalone mode */
+          /* PWA Optimizations - Only in standalone mode */
           @media all and (display-mode: standalone) {
             body {
               -webkit-user-select: none;
               -webkit-touch-callout: none;
               -webkit-tap-highlight-color: transparent;
             }
-            
-            ::-webkit-scrollbar {
-              width: 0px;
-              background: transparent;
-            }
-          }
-          
-          /* Prevent bounce scrolling on iOS */
-          body {
-            position: fixed;
-            overflow: hidden;
-            width: 100%;
-            height: 100%;
-          }
-          
-          #__next {
-            height: 100vh;
-            overflow-y: auto;
-            -webkit-overflow-scrolling: touch;
           }
           
           .datepicker-dark-theme .react-datepicker {
@@ -637,9 +624,9 @@ export default function Admin() {
           }
         `}</style>
         
-        <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-800 ios-safe-area">
+        <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-800 ios-safe-area-left ios-safe-area-right">
         {/* Modern Header */}
-        <div className="sticky top-0 z-40 bg-gray-800/95 backdrop-blur-md shadow-sm border-b border-gray-700">
+        <div className="sticky top-0 z-40 bg-gray-800/95 backdrop-blur-md shadow-sm border-b border-gray-700 ios-safe-area-top">
           <div className="px-4 py-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
