@@ -1,11 +1,11 @@
-// components/WhatsAppButton.js
+// components/Button.js
 import React from 'react';
 
-const Button = ({ text }) => {
+const Button = ({ text, href = "/order", className = "" }) => {
   return (
     <a
-      href="/order"
-      className="inline-flex items-center justify-center bg-gray-500 text-white px-6 py-3 rounded-lg shadow-md hover:bg-green-600 transition-colors duration-300"
+      href={href}
+      className={`inline-flex items-center justify-center bg-gradient-to-r from-orange-500 to-red-600 text-white px-6 sm:px-8 py-3 sm:py-4 rounded-xl shadow-lg hover:from-orange-600 hover:to-red-700 transition-all duration-300 font-semibold text-base sm:text-lg transform hover:scale-105 hover:shadow-xl min-w-[200px] ${className}`}
     >
       {text}
     </a>
