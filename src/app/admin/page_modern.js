@@ -53,46 +53,18 @@ export default function Admin() {
   const [showFilters, setShowFilters] = useState(false);
   const [expandedOrders, setExpandedOrders] = useState(new Set());
   const [refreshInterval, setRefreshInterval] = useState(null);
-  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
-  
-  // Monthly filter for stats
-  const [statsFilter, setStatsFilter] = useState("current_month"); // "all" or "current_month" or "custom_month"
-  const [selectedMonth, setSelectedMonth] = useState(new Date()); // For month/year picker
-  const [showMonthPicker, setShowMonthPicker] = useState(false);
 
-  // Close month picker when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (showMonthPicker && !event.target.closest('.month-picker-container')) {
-        setShowMonthPicker(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [showMonthPicker]);
-
-  const fetchOrders = useCallback(async (isAutoRefresh = false) => {
-    // Only show loading state if it's not an auto-refresh
-    if (!isAutoRefresh) {
-      setIsLoadingOrders(true);
-    }
-    
+  const fetchOrders = useCallback(async () => {
+    setIsLoadingOrders(true);
     try {
       const response = await axios.get("/api/orders");
       setOrders(response.data.orders || []);
       setAllOrders(response.data.orders || []);
     } catch (err) {
       console.error("Failed to fetch orders:", err);
-      if (!isAutoRefresh) {
-        setError("Gagal memuat pesanan");
-      }
+      setError("Gagal memuat pesanan");
     } finally {
-      if (!isAutoRefresh) {
-        setIsLoadingOrders(false);
-      }
+      setIsLoadingOrders(false);
     }
   }, []);
 
@@ -101,12 +73,9 @@ export default function Admin() {
     setIsAuthenticated(!!token);
     if (token) {
       fetchOrders();
-      
-      // Setup auto-refresh based on toggle state
-      if (autoRefreshEnabled) {
-        const interval = setInterval(() => fetchOrders(true), 30000);
-        setRefreshInterval(interval);
-      }
+      // Auto-refresh every 60 seconds (reduced for mobile)
+      const interval = setInterval(fetchOrders, 60000);
+      setRefreshInterval(interval);
     }
     
     return () => {
@@ -114,7 +83,7 @@ export default function Admin() {
         clearInterval(refreshInterval);
       }
     };
-  }, [fetchOrders, autoRefreshEnabled]);
+  }, [fetchOrders]);
 
   // Enhanced filtering logic
   const filteredOrders = useMemo(() => {
@@ -125,9 +94,9 @@ export default function Admin() {
       const searchLower = searchTerm.toLowerCase();
       filtered = filtered.filter(order => 
         order.order_id?.toLowerCase().includes(searchLower) ||
-        order.customer?.name?.toLowerCase().includes(searchLower) ||
-        order.customer?.phone?.includes(searchTerm) ||
-        (order.customer?.address && order.customer.address.toLowerCase().includes(searchLower))
+        order.name?.toLowerCase().includes(searchLower) ||
+        order.phone?.includes(searchTerm) ||
+        (order.address && order.address.toLowerCase().includes(searchLower))
       );
     }
 
@@ -221,13 +190,13 @@ export default function Admin() {
     };
 
     const sendWhatsAppMessage = (order) => {
-      const message = `Halo ${order.customer?.name}! 👋\n\nTerima kasih telah berbelanja di Babi Panggang Apung! 🍖\n\nPesanan Anda:\n📋 Order ID: ${order.order_id}\n💰 Total: ${formatCurrency(getOrderAmount(order))}\n📍 Status: ${getStatusText(order)}\n\n🔗 Cek status pesanan: https://bipangapung.vercel.app/cekorder/${order.order_id}\n\nTerima kasih! 🙏`;
-      const whatsappUrl = `https://wa.me/${order.customer?.phone?.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(message)}`;
+      const message = `Halo ${order.name}! 👋\n\nTerima kasih telah berbelanja di Babi Panggang Apung! 🍖\n\nPesanan Anda:\n📋 Order ID: ${order.order_id}\n💰 Total: ${formatCurrency(order.amount)}\n📍 Status: ${getStatusText(order.status)}\n\n🔗 Cek status pesanan: https://bipangapung.vercel.app/cekorder/${order.order_id}\n\nTerima kasih! 🙏`;
+      const whatsappUrl = `https://wa.me/${order.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(message)}`;
       window.open(whatsappUrl, '_blank');
     };
 
     const copyOrderMessage = (order) => {
-      const message = `Terima kasih telah berbelanja di Babi Panggang Apung!\nOrder ID: ${order.order_id}\nStatus: ${getStatusText(order)}\nTotal: ${formatCurrency(getOrderAmount(order))}\n\nCek pesanan: https://bipangapung.vercel.app/cekorder/${order.order_id}`;
+      const message = `Terima kasih telah berbelanja di Babi Panggang Apung!\nOrder ID: ${order.order_id}\nStatus: ${getStatusText(order.status)}\nTotal: ${formatCurrency(order.amount)}\n\nCek pesanan: https://bipangapung.vercel.app/cekorder/${order.order_id}`;
       navigator.clipboard.writeText(message);
       
       // Show toast notification
@@ -272,157 +241,52 @@ export default function Admin() {
       }
     };
 
-    const getOrderStatus = (order) => {
-      // For online payment orders, check payment status first
-      if (order.payment?.method === 'Pembayaran Online') {
-        if (order.payment?.status === 'settlement') {
-          // Payment completed, check if order has been updated to processing/completed
-          return order.status === 'completed' ? 'completed' : 
-                 order.status === 'processing' ? 'processing' : 'pending'; // Default to pending (menunggu) for paid orders
-        } else if (order.payment?.status === 'pending') {
-          return 'unpaid'; // Special status for unpaid orders
-        } else if (['expire', 'deny', 'cancel'].includes(order.payment?.status)) {
-          return 'cancelled'; // Payment failed
-        }
-      }
-      
-      // Default to the order status from database
-      return order.status || 'pending';
-    };
-
-    const getStatusText = (order) => {
-      const status = getOrderStatus(order);
+    const getStatusText = (status) => {
       switch (status) {
         case "completed":
           return "Selesai";
         case "processing":
           return "Diproses";
         case "pending":
-          return "Menunggu"; // All pending orders show "Menunggu"
-        case "unpaid":
-          return "Belum Bayar";
+          return "Menunggu";
         case "cancelled":
           return "Dibatalkan";
         default:
-          return "Menunggu"; // Changed from "Tidak Diketahui" to "Menunggu"
+          return "Tidak Diketahui";
       }
     };
 
-    const getStatusColor = (order) => {
-      const status = getOrderStatus(order);
+    const getStatusColor = (status) => {
       switch (status) {
         case "completed":
-          return "bg-green-900/30 text-green-300 border-green-700/50";
+          return "bg-green-100 text-green-800 border-green-200";
         case "processing":
-          return "bg-blue-900/30 text-blue-300 border-blue-700/50";
+          return "bg-yellow-100 text-yellow-800 border-yellow-200";
         case "pending":
-          return "bg-yellow-900/30 text-yellow-300 border-yellow-700/50";
-        case "unpaid":
-          return "bg-red-900/30 text-red-300 border-red-700/50";
+          return "bg-blue-100 text-blue-800 border-blue-200";
         case "cancelled":
-          return "bg-gray-900/30 text-gray-300 border-gray-700/50";
+          return "bg-red-100 text-red-800 border-red-200";
         default:
-          return "bg-yellow-900/30 text-yellow-300 border-yellow-700/50";
+          return "bg-gray-100 text-gray-800 border-gray-200";
       }
     };
 
-    // Helper function to get order total amount
-    const getOrderAmount = (order) => {
-      // Try different possible paths for amount, including items calculation
-      let amount = 0;
-      
-      // First try the payment amount
-      if (order.payment?.amount) {
-        amount = parseFloat(order.payment.amount);
-      }
-      // Then try direct amount fields
-      else if (order.amount) {
-        amount = parseFloat(order.amount);
-      }
-      else if (order.totalAmount) {
-        amount = parseFloat(order.totalAmount);
-      }
-      else if (order.finalTotal) {
-        amount = parseFloat(order.finalTotal);
-      }
-      // If no amount found, calculate from items
-      else if (order.items && Array.isArray(order.items)) {
-        const itemsTotal = order.items.reduce((itemSum, item) => {
-          return itemSum + (parseFloat(item.amount || 0) * parseInt(item.quantity || 0));
-        }, 0);
-        const deliveryFee = parseFloat(order.payment?.deliveryFee || order.deliveryFee || 0);
-        amount = itemsTotal + deliveryFee;
-      }
-      
-      return isNaN(amount) ? 0 : amount;
-    };
-
-    const calculateStats = useCallback(() => {
-      // Filter orders based on stats filter
-      let ordersToCalculate = orders;
-      
-      if (statsFilter === "current_month") {
-        const currentDate = new Date();
-        const currentMonth = currentDate.getMonth();
-        const currentYear = currentDate.getFullYear();
-        
-        ordersToCalculate = orders.filter(order => {
-          const orderDate = new Date(order.created_at);
-          return orderDate.getMonth() === currentMonth && orderDate.getFullYear() === currentYear;
-        });
-      } else if (statsFilter === "custom_month") {
-        const targetMonth = selectedMonth.getMonth();
-        const targetYear = selectedMonth.getFullYear();
-        
-        ordersToCalculate = orders.filter(order => {
-          const orderDate = new Date(order.created_at);
-          return orderDate.getMonth() === targetMonth && orderDate.getFullYear() === targetYear;
-        });
-      }
-      
-      // Use the helper function for consistent amount calculation
-      const total = ordersToCalculate.reduce((sum, order) => {
-        return sum + getOrderAmount(order);
+    const calculateStats = () => {
+      // Fix NaN issue by ensuring amount is a number
+      const total = orders.reduce((sum, order) => {
+        const amount = parseFloat(order.amount) || 0;
+        return sum + amount;
       }, 0);
       
-      const completed = ordersToCalculate.filter(o => getOrderStatus(o) === "completed").length;
-      const processing = ordersToCalculate.filter(o => getOrderStatus(o) === "processing").length;
-      const pending = ordersToCalculate.filter(o => getOrderStatus(o) === "pending").length;
-      const unpaid = ordersToCalculate.filter(o => getOrderStatus(o) === "unpaid").length;
-      const cancelled = ordersToCalculate.filter(o => getOrderStatus(o) === "cancelled").length;
+      const completed = orders.filter(o => o.status === "completed").length;
+      const processing = orders.filter(o => o.status === "processing").length;
+      const pending = orders.filter(o => o.status === "pending").length;
+      const cancelled = orders.filter(o => o.status === "cancelled").length;
       
-      return { total, completed, processing, pending: pending + unpaid, cancelled };
-    }, [orders, statsFilter, selectedMonth]);
-
-    const stats = useMemo(() => {
-      return calculateStats();
-    }, [calculateStats]);
-    
-    const getCurrentPeriodText = () => {
-      const monthNames = [
-        "Januari", "Februari", "Maret", "April", "Mei", "Juni",
-        "Juli", "Agustus", "September", "Oktober", "November", "Desember"
-      ];
-      
-      if (statsFilter === "current_month") {
-        const currentDate = new Date();
-        return `${monthNames[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
-      } else if (statsFilter === "custom_month") {
-        return `${monthNames[selectedMonth.getMonth()]} ${selectedMonth.getFullYear()}`;
-      }
-      return "Semua Waktu";
+      return { total, completed, processing, pending, cancelled };
     };
 
-    const toggleAutoRefresh = () => {
-      setAutoRefreshEnabled(prev => {
-        const newState = !prev;
-        if (!newState && refreshInterval) {
-          clearInterval(refreshInterval);
-          setRefreshInterval(null);
-        }
-        return newState;
-      });
-    };
+    const stats = calculateStats();
 
     const exportToCSV = () => {
       if (orders.length === 0) return;
@@ -430,14 +294,14 @@ export default function Admin() {
       const csvData = orders.map(order => ({
         order_id: order.order_id,
         tanggal: formatDate(order.created_at),
-        customer: order.customer?.name,
-        phone: order.customer?.phone,
-        alamat: order.customer?.address,
+        customer: order.name,
+        phone: order.phone,
+        alamat: order.address,
         items: order.items?.map(item => `${item.name} (${item.quantity})`).join('; ') || '',
-        total: getOrderAmount(order),
-        status: getStatusText(order),
-        pembayaran: order.payment?.method || order.paymentMethod,
-        pengiriman: order.orderDetails?.deliveryMethod || order.deliveryMethod
+        total: order.amount,
+        status: getStatusText(order.status),
+        pembayaran: order.paymentMethod,
+        pengiriman: order.deliveryMethod
       }));
 
       const csvContent = [
@@ -454,86 +318,9 @@ export default function Admin() {
     };
 
     return (
-      <>
-        <style jsx global>{`
-          .datepicker-dark-theme .react-datepicker {
-            background-color: #374151 !important;
-            border: 1px solid #4B5563 !important;
-            border-radius: 8px !important;
-            font-family: inherit !important;
-          }
-          
-          .datepicker-dark-theme .react-datepicker__header {
-            background-color: #4B5563 !important;
-            border-bottom: 1px solid #6B7280 !important;
-            border-radius: 8px 8px 0 0 !important;
-          }
-          
-          .datepicker-dark-theme .react-datepicker__current-month {
-            color: #FFFFFF !important;
-            font-weight: 600 !important;
-          }
-          
-          .datepicker-dark-theme .react-datepicker__navigation {
-            border: none !important;
-          }
-          
-          .datepicker-dark-theme .react-datepicker__navigation:hover *::before {
-            border-color: #FFFFFF !important;
-          }
-          
-          .datepicker-dark-theme .react-datepicker__navigation-icon::before {
-            border-color: #D1D5DB !important;
-          }
-          
-          .datepicker-dark-theme .react-datepicker__month-text {
-            color: #D1D5DB !important;
-            padding: 8px !important;
-            border-radius: 6px !important;
-            transition: all 0.2s ease !important;
-          }
-          
-          .datepicker-dark-theme .react-datepicker__month-text:hover {
-            background-color: #4B5563 !important;
-            color: #FFFFFF !important;
-          }
-          
-          .datepicker-dark-theme .react-datepicker__month-text--selected {
-            background-color: #8B5CF6 !important;
-            color: #FFFFFF !important;
-          }
-          
-          .datepicker-dark-theme .react-datepicker__month-text--keyboard-selected {
-            background-color: #7C3AED !important;
-            color: #FFFFFF !important;
-          }
-          
-          .datepicker-dark-theme .react-datepicker__year-text {
-            color: #D1D5DB !important;
-            padding: 8px !important;
-            border-radius: 6px !important;
-            transition: all 0.2s ease !important;
-          }
-          
-          .datepicker-dark-theme .react-datepicker__year-text:hover {
-            background-color: #4B5563 !important;
-            color: #FFFFFF !important;
-          }
-          
-          .datepicker-dark-theme .react-datepicker__year-text--selected {
-            background-color: #8B5CF6 !important;
-            color: #FFFFFF !important;
-          }
-          
-          .datepicker-dark-theme .react-datepicker__year-text--keyboard-selected {
-            background-color: #7C3AED !important;
-            color: #FFFFFF !important;
-          }
-        `}</style>
-        
-        <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-800">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-100">
         {/* Modern Header */}
-        <div className="sticky top-0 z-40 bg-gray-800/95 backdrop-blur-md shadow-sm border-b border-gray-700">
+        <div className="sticky top-0 z-40 bg-white/95 backdrop-blur-md shadow-sm border-b border-gray-200">
           <div className="px-4 py-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
@@ -545,11 +332,11 @@ export default function Admin() {
                     height={40} 
                     className="rounded-full shadow-md" 
                   />
-                  <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 border-2 border-gray-800 rounded-full animate-pulse"></div>
+                  <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 border-2 border-white rounded-full animate-pulse"></div>
                 </div>
                 <div>
-                  <h1 className="text-lg font-bold text-white">Admin Dashboard</h1>
-                  <p className="text-xs text-gray-400">Kelola pesanan dengan mudah</p>
+                  <h1 className="text-lg font-bold text-gray-900">Admin Dashboard</h1>
+                  <p className="text-xs text-gray-500">Kelola pesanan dengan mudah</p>
                 </div>
               </div>
               
@@ -557,22 +344,19 @@ export default function Admin() {
                 <button
                   onClick={fetchOrders}
                   disabled={isLoadingOrders}
-                  className="p-2 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-lg transition-all active:scale-95 disabled:opacity-50"
-                  title="Manual Refresh"
+                  className="p-2 rounded-full bg-blue-500 hover:bg-blue-600 text-white shadow-md transition-all active:scale-95 disabled:opacity-50"
+                  title="Refresh"
                 >
                   <FaSync className={`w-4 h-4 ${isLoadingOrders ? 'animate-spin' : ''}`} />
                 </button>
                 
                 <button
-                  onClick={toggleAutoRefresh}
-                  className={`p-2 rounded-full shadow-lg transition-all active:scale-95 ${
-                    autoRefreshEnabled 
-                      ? 'bg-green-600 hover:bg-green-700 text-white' 
-                      : 'bg-gray-600 hover:bg-gray-700 text-white'
-                  }`}
-                  title={autoRefreshEnabled ? "Auto-refresh ON - Click to turn OFF" : "Auto-refresh OFF - Click to turn ON"}
+                  onClick={exportToCSV}
+                  disabled={orders.length === 0}
+                  className="p-2 rounded-full bg-green-500 hover:bg-green-600 text-white shadow-md transition-all active:scale-95 disabled:opacity-30"
+                  title="Export CSV"
                 >
-                  <FaSync className={`w-4 h-4 ${autoRefreshEnabled ? '' : 'opacity-50'}`} />
+                  <FaDownload className="w-4 h-4" />
                 </button>
                 
                 <button
@@ -584,7 +368,7 @@ export default function Admin() {
                     localStorage.removeItem("adminToken");
                     setIsAuthenticated(false);
                   }}
-                  className="p-2 rounded-full bg-red-600 hover:bg-red-700 text-white shadow-lg transition-all active:scale-95"
+                  className="p-2 rounded-full bg-red-500 hover:bg-red-600 text-white shadow-md transition-all active:scale-95"
                   title="Logout"
                 >
                   <FaSignOutAlt className="w-4 h-4" />
@@ -596,101 +380,6 @@ export default function Admin() {
 
         {/* Stats Cards - Mobile Optimized */}
         <div className="px-4 py-4">
-          {/* Stats Filter Toggle */}
-          <div className="mb-4 bg-gray-800 rounded-lg p-3">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center space-x-3">
-                <FaChartLine className="text-blue-400 text-lg" />
-                <div>
-                  <span className="text-white font-medium">Statistik Penjualan</span>
-                  <p className="text-gray-400 text-xs">{getCurrentPeriodText()}</p>
-                </div>
-              </div>
-            </div>
-            
-            <div className="flex items-center space-x-2 flex-wrap gap-2">
-              <button
-                onClick={() => setStatsFilter("all")}
-                className={`px-3 py-1 rounded-lg text-sm font-medium transition-all ${
-                  statsFilter === "all" 
-                    ? "bg-blue-600 text-white shadow-lg" 
-                    : "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                }`}
-              >
-                Semua
-              </button>
-              <button
-                onClick={() => setStatsFilter("current_month")}
-                className={`px-3 py-1 rounded-lg text-sm font-medium transition-all ${
-                  statsFilter === "current_month" 
-                    ? "bg-blue-600 text-white shadow-lg" 
-                    : "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                }`}
-              >
-                Bulan Ini
-              </button>
-              
-              {/* Month/Year Picker */}
-              <div className="relative month-picker-container">
-                <button
-                  onClick={() => {
-                    setShowMonthPicker(!showMonthPicker);
-                    if (!showMonthPicker) {
-                      setStatsFilter("custom_month");
-                    }
-                  }}
-                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-all flex items-center space-x-1 ${
-                    statsFilter === "custom_month" 
-                      ? "bg-purple-600 text-white shadow-lg" 
-                      : "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                  }`}
-                >
-                  <FaCalendarAlt className="text-xs" />
-                  <span>Pilih Bulan</span>
-                </button>
-                
-                {showMonthPicker && (
-                  <div className="absolute top-full left-0 mt-2 bg-gray-700 rounded-lg shadow-xl border border-gray-600 p-4 z-50 min-w-[280px]">
-                    <div className="text-center mb-4">
-                      <h4 className="text-white font-medium text-sm">Pilih Bulan & Tahun</h4>
-                    </div>
-                    
-                    <div className="datepicker-dark-theme">
-                      <DatePicker
-                        selected={selectedMonth}
-                        onChange={(date) => {
-                          setSelectedMonth(date);
-                          setStatsFilter("custom_month");
-                        }}
-                        dateFormat="MM/yyyy"
-                        showMonthYearPicker
-                        inline
-                      />
-                    </div>
-                    
-                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-600">
-                      <button
-                        onClick={() => {
-                          setSelectedMonth(new Date());
-                          setStatsFilter("custom_month");
-                        }}
-                        className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg transition-all"
-                      >
-                        Bulan Ini
-                      </button>
-                      <button
-                        onClick={() => setShowMonthPicker(false)}
-                        className="px-3 py-1 bg-gray-600 hover:bg-gray-500 text-white text-xs rounded-lg transition-all"
-                      >
-                        Tutup
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-          
           <div className="grid grid-cols-2 gap-3 mb-4">
             <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl p-4 text-white shadow-lg">
               <div className="flex items-center justify-between">
@@ -736,7 +425,7 @@ export default function Admin() {
 
         {/* Search and Filters - Mobile First */}
         <div className="px-4 pb-4">
-          <div className="bg-gray-800 rounded-xl shadow-lg border border-gray-700 p-4">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
             {/* Search Bar */}
             <div className="relative mb-3">
               <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -745,7 +434,7 @@ export default function Admin() {
                 placeholder="Cari order ID, nama, atau nomor HP..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 bg-gray-700 border border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm text-white placeholder-gray-400"
+                className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
               />
             </div>
 
@@ -754,7 +443,7 @@ export default function Admin() {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-white"
+                className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
               >
                 <option value="all">🔍 Semua Status</option>
                 <option value="pending">⏳ Menunggu</option>
@@ -767,8 +456,8 @@ export default function Admin() {
                 onClick={() => setShowFilters(!showFilters)}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                   showFilters 
-                    ? 'bg-blue-600 text-white' 
-                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    ? 'bg-blue-500 text-white' 
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
                 <FaFilter className="w-4 h-4" />
@@ -777,9 +466,9 @@ export default function Admin() {
 
             {/* Advanced Filters */}
             {showFilters && (
-              <div className="border-t border-gray-700 pt-3 space-y-3">
+              <div className="border-t border-gray-200 pt-3 space-y-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-300 mb-1">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
                     📅 Tanggal Spesifik
                   </label>
                   <DatePicker
@@ -788,7 +477,7 @@ export default function Admin() {
                       setSelectedDate(date);
                       setDateRange({ startDate: null, endDate: null });
                     }}
-                    className="w-full p-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-white"
+                    className="w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
                     placeholderText="Pilih tanggal"
                     dateFormat="dd/MM/yyyy"
                   />
@@ -796,7 +485,7 @@ export default function Admin() {
                 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-xs font-medium text-gray-300 mb-1">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
                       Dari Tanggal
                     </label>
                     <DatePicker
@@ -808,13 +497,13 @@ export default function Admin() {
                       selectsStart
                       startDate={dateRange.startDate}
                       endDate={dateRange.endDate}
-                      className="w-full p-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-white"
+                      className="w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
                       placeholderText="Mulai"
                       dateFormat="dd/MM/yyyy"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-300 mb-1">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
                       Sampai Tanggal
                     </label>
                     <DatePicker
@@ -827,7 +516,7 @@ export default function Admin() {
                       startDate={dateRange.startDate}
                       endDate={dateRange.endDate}
                       minDate={dateRange.startDate}
-                      className="w-full p-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-white"
+                      className="w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
                       placeholderText="Sampai"
                       dateFormat="dd/MM/yyyy"
                     />
@@ -836,14 +525,14 @@ export default function Admin() {
                 
                 <button
                   onClick={clearFilters}
-                  className="w-full py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg text-sm font-medium transition-colors"
+                  className="w-full py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition-colors"
                 >
                   🗑️ Reset Filter
                 </button>
               </div>
             )}
             
-            <div className="flex items-center justify-between text-xs text-gray-400 mt-3 pt-3 border-t border-gray-600">
+            <div className="flex items-center justify-between text-xs text-gray-500 mt-3 pt-3 border-t border-gray-100">
               <span>Menampilkan {orders.length} dari {allOrders.length} pesanan</span>
               <span className="flex items-center">
                 <div className="w-2 h-2 bg-green-400 rounded-full mr-1 animate-pulse"></div>
@@ -856,7 +545,7 @@ export default function Admin() {
         {/* Error Message */}
         {error && (
           <div className="px-4 pb-4">
-            <div className="bg-red-900/50 border border-red-700 text-red-300 px-4 py-3 rounded-xl text-sm">
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
               ⚠️ {error}
             </div>
           </div>
@@ -866,15 +555,15 @@ export default function Admin() {
         <div className="px-4 pb-6">
           {isLoadingOrders ? (
             <div className="text-center py-12">
-              <FaSpinner className="w-8 h-8 text-blue-400 mx-auto mb-4 animate-spin" />
-              <p className="text-gray-300 font-medium">Memuat pesanan...</p>
-              <p className="text-gray-500 text-sm">Harap tunggu sebentar</p>
+              <FaSpinner className="w-8 h-8 text-blue-500 mx-auto mb-4 animate-spin" />
+              <p className="text-gray-600 font-medium">Memuat pesanan...</p>
+              <p className="text-gray-400 text-sm">Harap tunggu sebentar</p>
             </div>
           ) : orders.length === 0 ? (
             <div className="text-center py-12">
-              <FaBoxOpen className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-300 mb-2">Tidak ada pesanan</h3>
-              <p className="text-gray-500 text-sm">
+              <FaBoxOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-gray-600 mb-2">Tidak ada pesanan</h3>
+              <p className="text-gray-400 text-sm">
                 {searchTerm || statusFilter !== 'all' ? 'Tidak ada pesanan yang sesuai filter' : 'Belum ada pesanan masuk hari ini'}
               </p>
             </div>
@@ -883,26 +572,24 @@ export default function Admin() {
               {orders.map((order) => (
                 <div
                   key={order.order_id}
-                  className="bg-gray-800 rounded-xl shadow-lg border border-gray-700 overflow-hidden"
+                  className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden"
                 >
                   {/* Order Header - Always Visible */}
                   <div 
-                    className="p-4 cursor-pointer active:bg-gray-700/50"
+                    className="p-4 cursor-pointer active:bg-gray-50"
                     onClick={() => toggleOrderExpansion(order.order_id)}
                   >
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center space-x-2">
                         {getStatusIcon(order.status)}
-                        <span className="font-mono text-sm font-bold text-white">
+                        <span className="font-mono text-sm font-bold text-gray-900">
                           #{order.order_id}
                         </span>
                       </div>
                       <div className="flex items-center space-x-2">
-                        <div className="flex items-center">
-                          <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(order)}`}>
-                            {getStatusText(order)}
-                          </span>
-                        </div>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(order.status)}`}>
+                          {getStatusText(order.status)}
+                        </span>
                         {expandedOrders.has(order.order_id) ? 
                           <FaChevronUp className="w-4 h-4 text-gray-400" /> : 
                           <FaChevronDown className="w-4 h-4 text-gray-400" />
@@ -912,78 +599,78 @@ export default function Admin() {
                     
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-semibold text-white">{order.customer?.name}</p>
-                        <p className="text-sm text-gray-400">{formatDate(order.created_at)}</p>
+                        <p className="font-semibold text-gray-900">{order.name}</p>
+                        <p className="text-sm text-gray-500">{formatDate(order.created_at)}</p>
                       </div>
                       <div className="text-right">
-                        <p className="font-bold text-lg text-white">{formatCurrency(getOrderAmount(order))}</p>
-                        <p className="text-xs text-gray-400">{order.items?.length || 0} item</p>
+                        <p className="font-bold text-lg text-gray-900">{formatCurrency(order.amount)}</p>
+                        <p className="text-xs text-gray-500">{order.items?.length || 0} item</p>
                       </div>
                     </div>
                   </div>
 
                   {/* Expanded Details */}
                   {expandedOrders.has(order.order_id) && (
-                    <div className="border-t border-gray-700">
+                    <div className="border-t border-gray-100">
                       {/* Customer Info */}
-                      <div className="p-4 bg-gray-700/50">
-                        <h4 className="font-semibold text-white mb-2 flex items-center">
-                          <FaUser className="w-4 h-4 mr-2 text-blue-400" />
+                      <div className="p-4 bg-gray-50">
+                        <h4 className="font-semibold text-gray-900 mb-2 flex items-center">
+                          <FaUser className="w-4 h-4 mr-2 text-blue-500" />
                           Info Pelanggan
                         </h4>
                         <div className="space-y-1 text-sm">
-                          <p className="flex items-center text-gray-300">
+                          <p className="flex items-center text-gray-700">
                             <FaPhone className="w-3 h-3 mr-2 text-gray-400" />
-                            {order.customer?.phone}
+                            {order.phone}
                           </p>
-                          <p className="flex items-start text-gray-300">
+                          <p className="flex items-start text-gray-700">
                             <FaMapMarkerAlt className="w-3 h-3 mr-2 mt-0.5 text-gray-400 flex-shrink-0" />
-                            <span className="break-words">{order.customer?.address}</span>
+                            <span className="break-words">{order.address}</span>
                           </p>
                         </div>
                       </div>
 
                       {/* Order Details */}
                       <div className="p-4">
-                        <h4 className="font-semibold text-white mb-2 flex items-center">
-                          <FaCalendarAlt className="w-4 h-4 mr-2 text-green-400" />
+                        <h4 className="font-semibold text-gray-900 mb-2 flex items-center">
+                          <FaCalendarAlt className="w-4 h-4 mr-2 text-green-500" />
                           Detail Pesanan
                         </h4>
                         <div className="grid grid-cols-2 gap-2 text-sm">
                           <div>
-                            <span className="text-gray-400">Tanggal:</span>
-                            <p className="font-medium text-gray-300">{order.orderDetails?.date || formatDate(order.created_at) || 'Tidak tersedia'}</p>
+                            <span className="text-gray-500">Tanggal:</span>
+                            <p className="font-medium">{order.date}</p>
                           </div>
                           <div>
-                            <span className="text-gray-400">Pengiriman:</span>
-                            <p className="font-medium text-gray-300">{order.orderDetails?.deliveryMethod || 'Tidak tersedia'}</p>
+                            <span className="text-gray-500">Pengiriman:</span>
+                            <p className="font-medium">{order.deliveryMethod}</p>
                           </div>
                           <div>
-                            <span className="text-gray-400">Pembayaran:</span>
-                            <p className="font-medium text-gray-300">{order.payment?.method || 'Tidak tersedia'}</p>
+                            <span className="text-gray-500">Pembayaran:</span>
+                            <p className="font-medium">{order.paymentMethod}</p>
                           </div>
                           <div>
-                            <span className="text-gray-400">Ongkir:</span>
-                            <p className="font-medium text-gray-300">{formatCurrency(order.payment?.deliveryFee || 0)}</p>
+                            <span className="text-gray-500">Ongkir:</span>
+                            <p className="font-medium">{formatCurrency(order.deliveryFee || 0)}</p>
                           </div>
                         </div>
-                        {order.customer?.note && (
-                          <div className="mt-2 p-2 bg-yellow-900/30 border border-yellow-700 rounded-lg">
+                        {order.note && (
+                          <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
                             <p className="text-sm">
-                              <span className="font-medium text-yellow-300">Catatan:</span>
-                              <span className="text-yellow-200 ml-1">{order.customer.note}</span>
+                              <span className="font-medium text-yellow-800">Catatan:</span>
+                              <span className="text-yellow-700 ml-1">{order.note}</span>
                             </p>
                           </div>
                         )}
                       </div>
 
                       {/* Items List */}
-                      <div className="p-4 border-t border-gray-700">
-                        <h4 className="font-semibold text-white mb-3">🛍️ Items Pesanan</h4>
+                      <div className="p-4 border-t border-gray-100">
+                        <h4 className="font-semibold text-gray-900 mb-3">🛍️ Items Pesanan</h4>
                         <div className="space-y-2">
                           {order.items?.map((item, index) => (
-                            <div key={index} className="flex items-center bg-gray-700/50 p-3 rounded-lg">
-                              <div className="w-10 h-10 bg-gray-600 rounded-lg overflow-hidden mr-3 flex-shrink-0">
+                            <div key={index} className="flex items-center bg-gray-50 p-3 rounded-lg">
+                              <div className="w-10 h-10 bg-gray-200 rounded-lg overflow-hidden mr-3 flex-shrink-0">
                                 <Image
                                   src={item.image}
                                   alt={item.name}
@@ -993,34 +680,34 @@ export default function Admin() {
                                 />
                               </div>
                               <div className="flex-1 min-w-0">
-                                <h5 className="font-medium text-white truncate">{item.name}</h5>
-                                <p className="text-sm text-gray-400">
+                                <h5 className="font-medium text-gray-900 truncate">{item.name}</h5>
+                                <p className="text-sm text-gray-500">
                                   {item.quantity} × {formatCurrency(item.amount)}
                                 </p>
                               </div>
                               <div className="text-right flex-shrink-0">
-                                <p className="font-bold text-white">
+                                <p className="font-bold text-gray-900">
                                   {formatCurrency((item.quantity || 0) * (item.amount || 0))}
                                 </p>
                               </div>
                             </div>
                           )) || (
-                            <p className="text-gray-400 text-center py-2">Tidak ada item</p>
+                            <p className="text-gray-500 text-center py-2">Tidak ada item</p>
                           )}
                         </div>
                       </div>
 
                       {/* Actions */}
-                      <div className="p-4 border-t border-gray-700 bg-gray-700/50">
+                      <div className="p-4 border-t border-gray-100 bg-gray-50">
                         {/* Status Selector */}
                         <div className="mb-3">
-                          <label className="block text-xs font-medium text-gray-300 mb-1">
+                          <label className="block text-xs font-medium text-gray-700 mb-1">
                             Ubah Status
                           </label>
                           <select
                             value={order.status}
                             onChange={(e) => handleStatusChange(order.order_id, e.target.value)}
-                            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-white"
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
                           >
                             <option value="pending">⏳ Menunggu</option>
                             <option value="processing">🔄 Diproses</option>
@@ -1076,7 +763,6 @@ export default function Admin() {
           )}
         </div>
       </div>
-      </>
     );
   };
 
