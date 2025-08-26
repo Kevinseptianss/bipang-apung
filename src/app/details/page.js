@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 import Image from "next/image";
 import bg from "@/assets/bg.png";
-import { FaArrowLeft, FaUser, FaMapMarkerAlt, FaPhone, FaStickyNote, FaCalendarAlt, FaTruck, FaSpinner, FaStore, FaClock, FaGoogle, FaSignOutAlt } from "react-icons/fa";
+import { FaArrowLeft, FaUser, FaMapMarkerAlt, FaPhone, FaStickyNote, FaCalendarAlt, FaTruck, FaSpinner, FaStore, FaClock, FaGoogle, FaSignOutAlt, FaLock } from "react-icons/fa";
 import { auth, googleProvider } from "@/config/firebase";
 import { signInWithPopup, signOut, onAuthStateChanged } from "firebase/auth";
 import ProfileHeader from "@/components/ProfileHeader";

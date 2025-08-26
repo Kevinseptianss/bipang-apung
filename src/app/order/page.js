@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import Image from "next/image";
+import Link from "next/link";
 import bg from "@/assets/bg.png";
 import ProfileHeader from "@/components/ProfileHeader";
 import { FaHome, FaMinus, FaPlus, FaShoppingCart, FaTimes } from "react-icons/fa";
@@ -127,10 +128,10 @@ export default function Order() {
         
         {/* Bottom row - Navigation and Cart */}
         <div className="flex justify-between items-center px-4 pb-4">
-          <a href="/" className="flex items-center text-white hover:text-orange-400 transition-colors text-sm md:text-base">
+          <Link href="/" className="flex items-center text-white hover:text-orange-400 transition-colors text-sm md:text-base">
             <FaHome className="mr-2" size={16} />
             <span className="font-medium">Beranda</span>
-          </a>
+          </Link>
           
           <button 
             onClick={() => setShowCart(true)}

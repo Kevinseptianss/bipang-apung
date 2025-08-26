@@ -1,9 +1,10 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { auth } from "@/config/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { FaArrowLeft, FaUser, FaClock, FaCheckCircle, FaTimesCircle, FaExclamationCircle, FaShoppingCart, FaTruck, FaStore, FaSync, FaWhatsapp } from "react-icons/fa";
 import Image from "next/image";
+import Link from "next/link";
 import bg from "@/assets/bg.png";
 import axios from "axios";
 import ProfileHeader from "@/components/ProfileHeader";
@@ -15,39 +16,7 @@ export default function Profile() {
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      if (currentUser) {
-        setUser(currentUser);
-        await fetchTransactions(currentUser.uid);
-      } else {
-        window.location.href = "/";
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  const fetchTransactions = async (userId) => {
-    try {
-      setLoading(true);
-      const response = await axios.get(`/api/orders?userId=${userId}`);
-      if (response.data.success) {
-        const orders = response.data.orders || [];
-        setTransactions(orders);
-        
-        // Check payment status for pending orders
-        await checkPendingPayments(orders);
-      }
-    } catch (error) {
-      console.error("Error fetching transactions:", error);
-      setError("Gagal memuat riwayat transaksi");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const checkPendingPayments = async (orders) => {
+  const checkPendingPayments = useCallback(async (orders) => {
     const pendingOrders = orders.filter(order => 
       order.payment?.status === 'pending' || order.status === 'pending'
     );
@@ -116,7 +85,39 @@ export default function Profile() {
       console.log('Updating transaction list with new payment statuses');
       setTransactions(updatedOrders);
     }
-  };
+  }, [setTransactions]);
+
+  const fetchTransactions = useCallback(async (userId) => {
+    try {
+      setLoading(true);
+      const response = await axios.get(`/api/orders?userId=${userId}`);
+      if (response.data.success) {
+        const orders = response.data.orders || [];
+        setTransactions(orders);
+        
+        // Check payment status for pending orders
+        await checkPendingPayments(orders);
+      }
+    } catch (error) {
+      console.error("Error fetching transactions:", error);
+      setError("Gagal memuat riwayat transaksi");
+    } finally {
+      setLoading(false);
+    }
+  }, [checkPendingPayments]);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (currentUser) {
+        setUser(currentUser);
+        await fetchTransactions(currentUser.uid);
+      } else {
+        window.location.href = "/";
+      }
+    });
+
+    return () => unsubscribe();
+  }, [fetchTransactions]);
 
   const getStatusIcon = (status) => {
     switch (status) {
@@ -237,10 +238,10 @@ ${transaction.customer?.note ? `Catatan: ${transaction.customer.note}` : ''}
 
       {/* Header */}
       <header className="relative z-50 flex justify-between items-center p-4 bg-black/30 backdrop-blur-sm border-b border-white/10">
-        <a href="/" className="flex items-center text-white hover:text-orange-400 transition-colors">
+        <Link href="/" className="flex items-center text-white hover:text-orange-400 transition-colors">
           <FaArrowLeft className="mr-2" />
           <span className="font-semibold">Beranda</span>
-        </a>
+        </Link>
         <h1 className="text-xl font-bold text-white">Profil & Riwayat</h1>
         <ProfileHeader />
       </header>
