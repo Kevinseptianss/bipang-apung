@@ -3,10 +3,16 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 import Image from "next/image";
 import bg from "@/assets/bg.png";
-import { FaArrowLeft, FaUser, FaMapMarkerAlt, FaPhone, FaStickyNote, FaCalendarAlt, FaTruck, FaSpinner, FaStore, FaClock, FaGoogle, FaSignOutAlt, FaLock } from "react-icons/fa";
+import { FaArrowLeft, FaUser, FaMapMarkerAlt, FaPhone, FaStickyNote, FaCalendarAlt, FaTruck, FaSpinner, FaStore, FaClock, FaGoogle, FaSignOutAlt, FaLock, FaMap } from "react-icons/fa";
 import { auth, googleProvider } from "@/config/firebase";
 import { signInWithPopup, signOut, onAuthStateChanged } from "firebase/auth";
 import ProfileHeader from "@/components/ProfileHeader";
+import dynamic from "next/dynamic";
+
+const MapPicker = dynamic(() => import("@/components/MapPicker"), { 
+  ssr: false,
+  loading: () => <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-md flex items-center justify-center text-white">Memuat Peta...</div>
+});
 
 export default function Details() {
   // Set minimum order date to H+1 (tomorrow)
@@ -96,6 +102,69 @@ export default function Details() {
     } catch (error) {
       console.error("Error signing out:", error);
     }
+  };
+
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
+  const [showMap, setShowMap] = useState(false);
+
+  const handleMapSelect = async (lat, lng) => {
+    setShowMap(false);
+    setIsGettingLocation(true);
+    try {
+      const response = await axios.get(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`
+      );
+      if (response.data && response.data.display_name) {
+        setFormData(prev => ({
+          ...prev,
+          address: response.data.display_name
+        }));
+      }
+    } catch (err) {
+      setError("Gagal mendapatkan alamat dari peta. Silakan masukkan manual.");
+    } finally {
+      setIsGettingLocation(false);
+    }
+  };
+
+  const handleGetLocation = () => {
+    if (!navigator.geolocation) {
+      setError("Geolocation tidak didukung oleh browser Anda");
+      return;
+    }
+
+    setIsGettingLocation(true);
+    setError(null);
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const { latitude, longitude } = position.coords;
+          const response = await axios.get(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
+          );
+          
+          if (response.data && response.data.display_name) {
+            setFormData(prev => ({
+              ...prev,
+              address: response.data.display_name
+            }));
+          } else {
+            setError("Gagal mendapatkan detail alamat. Silakan masukkan manual.");
+          }
+        } catch (err) {
+          console.error("Geocoding error:", err);
+          setError("Gagal mendapatkan alamat. Silakan masukkan manual.");
+        } finally {
+          setIsGettingLocation(false);
+        }
+      },
+      (err) => {
+        console.error("Geolocation error:", err);
+        setIsGettingLocation(false);
+        setError("Izin lokasi ditolak atau tidak tersedia.");
+      }
+    );
   };
 
   const handleChange = (e) => {
@@ -302,10 +371,35 @@ export default function Details() {
               {/* Address - Only show for delivery */}
               {orderType === "delivery" && (
                 <div>
-                  <label className="flex items-center text-white text-sm font-semibold mb-2">
-                    <FaMapMarkerAlt className="mr-2 text-orange-400" />
-                    Alamat Lengkap
-                  </label>
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="flex items-center text-white text-sm font-semibold">
+                      <FaMapMarkerAlt className="mr-2 text-orange-400" />
+                      Alamat Lengkap
+                    </label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={handleGetLocation}
+                        disabled={isGettingLocation}
+                        className="text-[10px] bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 px-2 py-1 rounded-full border border-orange-500/30 transition-all flex items-center gap-1 active:scale-95 disabled:opacity-50"
+                      >
+                        {isGettingLocation ? (
+                          <FaSpinner className="animate-spin" />
+                        ) : (
+                          <FaMapMarkerAlt />
+                        )}
+                        {isGettingLocation ? "Mencari..." : "Lokasi"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowMap(true)}
+                        className="text-[10px] bg-white/10 hover:bg-white/20 text-white px-2 py-1 rounded-full border border-white/10 transition-all flex items-center gap-1 active:scale-95"
+                      >
+                        <FaMap />
+                        Peta
+                      </button>
+                    </div>
+                  </div>
                   <textarea
                     name="address"
                     value={formData.address}
@@ -461,6 +555,13 @@ export default function Details() {
           )}
         </div>
       </div>
+
+      {showMap && (
+        <MapPicker 
+          onSelect={handleMapSelect} 
+          onClose={() => setShowMap(false)} 
+        />
+      )}
     </div>
   );
 }

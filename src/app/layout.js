@@ -1,5 +1,6 @@
 import { Roboto, Roboto_Mono } from "next/font/google";
 import "./globals.css";
+import "leaflet/dist/leaflet.css";
 import { Analytics } from "@vercel/analytics/react"
 import MobileNavbar from "@/components/MobileNavbar";
 
