@@ -1,6 +1,7 @@
 import { Roboto, Roboto_Mono } from "next/font/google";
 import "./globals.css";
 import { Analytics } from "@vercel/analytics/react"
+import MobileNavbar from "@/components/MobileNavbar";
 
 const roboto = Roboto({
   weight: '400', // You can specify the weight you need
@@ -45,7 +46,10 @@ export default function RootLayout({ children }) {
       <body
         className={`${roboto.variable} ${robotoMono.variable} antialiased`}
       >
-        {children}
+        <div className="pb-24 md:pb-0">
+          {children}
+        </div>
+        <MobileNavbar />
         <Analytics />
       </body>
     </html>

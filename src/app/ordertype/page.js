@@ -34,7 +34,7 @@ export default function OrderType() {
           src={bg} 
           alt="background" 
           fill
-          className="object-cover"
+          className="object-cover blur-[6px] scale-105 opacity-80"
         />
         <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/80 to-black/90" />
       </div>
@@ -46,7 +46,9 @@ export default function OrderType() {
           <span className="font-semibold">Kembali</span>
         </a>
         <h1 className="text-xl font-bold text-white">Pilih Metode Pengambilan</h1>
-        <ProfileHeader />
+        <div className="hidden md:block">
+          <ProfileHeader />
+        </div>
       </header>
 
       <div className="relative z-10 flex-1 p-4">

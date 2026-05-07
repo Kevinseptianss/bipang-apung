@@ -1,19 +1,21 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import axios from "axios";
 import Image from "next/image";
 import Link from "next/link";
 import bg from "@/assets/bg.png";
 import ProfileHeader from "@/components/ProfileHeader";
 import { FaHome, FaMinus, FaPlus, FaShoppingCart, FaTimes } from "react-icons/fa";
+import MobileNavbar from "@/components/MobileNavbar";
 
 export default function Order() {
-  const [menuItems, setMenuItems] = useState([]); // State to store menu items
-  const [loading, setLoading] = useState(true); // State to track loading status
-  const [error, setError] = useState(null); // State to handle errors
-  const [cart, setCart] = useState([]); // State to store cart items
+  const [menuItems, setMenuItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [cart, setCart] = useState([]);
   const [total, setTotal] = useState(0);
-  const [showCart, setShowCart] = useState(false); // State for cart modal
+  const [showCart, setShowCart] = useState(false);
 
   const handleIncrement = (item) => {
     const updatedCart = cart.map(cartItem =>
@@ -22,13 +24,11 @@ export default function Order() {
         : cartItem
     );
     setCart(updatedCart);
-    // Save the UPDATED cart, not the old one
     localStorage.setItem("cart", JSON.stringify(updatedCart));
   };
   
   const handleDecrement = (item) => {
     const existingItem = cart.find(cartItem => cartItem.id === item.id);
-    
     if (existingItem.quantity === 1) {
       const filteredCart = cart.filter(cartItem => cartItem.id !== item.id);
       setCart(filteredCart);
@@ -45,21 +45,13 @@ export default function Order() {
   };
 
   const handleContinue = () => {
-    // Redirect to the order type selection page
     window.location.href = "/ordertype";
   };
   
   const handleCart = (item) => {
     const existingItem = cart.find((cartItem) => cartItem.id === item.id);
-  
     if (existingItem) {
-      const updatedCart = cart.map((cartItem) =>
-        cartItem.id === item.id
-          ? { ...cartItem, quantity: cartItem.quantity + 1 }
-          : cartItem
-      );
-      setCart(updatedCart);
-      localStorage.setItem("cart", JSON.stringify(updatedCart));
+      handleIncrement(item);
     } else {
       const newCart = [...cart, { ...item, quantity: 1 }];
       setCart(newCart);
@@ -74,152 +66,129 @@ export default function Order() {
   };
 
   useEffect(() => {
-    // Calculate the total whenever the cart changes
-    const newTotal = cart.reduce(
-      (sum, item) => sum + item.amount * item.quantity,
-      0
-    );
+    const newTotal = cart.reduce((sum, item) => sum + item.amount * item.quantity, 0);
     setTotal(newTotal);
-  }, [cart]); // Re-run this effect whenever `cart` changes
+  }, [cart]);
 
-  // Fetch menu items from the API
   useEffect(() => {
     const fetchMenu = async () => {
       try {
-        const response = await axios.get("/api/getMenu"); // Fetch data from the API
-        setMenuItems(response.data); // Update state with fetched data
-        const newCart = localStorage.getItem("cart");
-        if (newCart) {
-          setCart(JSON.parse(newCart));
+        const response = await axios.get("/api/getMenu");
+        setMenuItems(response.data);
+        const savedCart = localStorage.getItem("cart");
+        if (savedCart) {
+          setCart(JSON.parse(savedCart));
         }
       } catch (error) {
         console.error("Error fetching menu:", error);
-        setError("Failed to fetch menu items"); // Set error message
+        setError("Gagal memuat menu");
       } finally {
-        setLoading(false); // Set loading to false
+        setLoading(false);
       }
     };
-
     fetchMenu();
   }, []);
 
   const cartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col pb-24 md:pb-0">
       {/* Background */}
       <div className="fixed inset-0 z-0">
         <Image 
           src={bg} 
           alt="background" 
           fill
-          className="object-cover"
+          className="object-cover blur-[6px] scale-105 opacity-80"
+          priority
         />
         <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/80 to-black/90" />
       </div>
 
-      {/* Header */}
-      <header className="relative z-50 bg-black/30 backdrop-blur-sm border-b border-white/10">
-        {/* Top row - Logo and Profile */}
-        <div className="flex justify-between items-center p-4 pb-2">
+      {/* Header - Desktop Only */}
+      <header className="relative z-50 bg-black/30 backdrop-blur-sm border-b border-white/10 sticky top-0 hidden md:block">
+        <div className="flex justify-between items-center p-4">
           <h1 className="text-xl md:text-2xl font-bold text-white">Menu Kami</h1>
-          <ProfileHeader />
-        </div>
-        
-        {/* Bottom row - Navigation and Cart */}
-        <div className="flex justify-between items-center px-4 pb-4">
-          <Link href="/" className="flex items-center text-white hover:text-orange-400 transition-colors text-sm md:text-base">
-            <FaHome className="mr-2" size={16} />
-            <span className="font-medium">Beranda</span>
-          </Link>
-          
-          <button 
-            onClick={() => setShowCart(true)}
-            className="flex items-center bg-orange-600 hover:bg-orange-700 text-white px-3 py-2 md:px-4 md:py-2 rounded-lg transition-colors relative text-sm md:text-base"
-          >
-            <FaShoppingCart className="mr-2" size={16} />
-            <span className="hidden sm:inline">Keranjang</span>
-            <span className="sm:hidden">Cart</span>
-            {cartItemCount > 0 && (
-              <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 md:w-6 md:h-6 flex items-center justify-center">
-                {cartItemCount}
-              </span>
-            )}
-          </button>
+          <div className="flex items-center gap-4">
+            {/* Desktop Cart Button */}
+            <button 
+              onClick={() => setShowCart(true)}
+              className="hidden md:flex items-center bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg transition-all relative"
+            >
+              <FaShoppingCart className="mr-2" size={16} />
+              <span>Keranjang</span>
+              {cartItemCount > 0 && (
+                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center border-2 border-black">
+                  {cartItemCount}
+                </span>
+              )}
+            </button>
+            <ProfileHeader />
+          </div>
         </div>
       </header>
 
       {/* Main Content */}
       <main className="relative z-10 flex-1 p-4">
-        {/* Display loading message */}
-        {loading && (
-          <div className="flex justify-center items-center min-h-[400px]">
-            <div className="text-white text-xl">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto mb-4"></div>
-              Memuat menu...
-            </div>
+        {loading ? (
+          <div className="flex flex-col justify-center items-center min-h-[400px]">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mb-4" />
+            <p className="text-white">Memuat menu...</p>
           </div>
-        )}
-
-        {/* Display error message */}
-        {error && (
-          <div className="bg-red-500/20 border border-red-500 text-red-100 px-4 py-3 rounded-lg mb-4 backdrop-blur-sm">
+        ) : error ? (
+          <div className="max-w-md mx-auto bg-red-500/20 border border-red-500 text-red-100 px-6 py-4 rounded-2xl backdrop-blur-md text-center">
             {error}
           </div>
-        )}
-
-        {/* Display menu items */}
-        {!loading && !error && (
+        ) : (
           <div className="max-w-6xl mx-auto">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6">
               {menuItems.map((item) => (
                 <div
                   key={item.id}
-                  className="bg-white/10 backdrop-blur-sm rounded-2xl overflow-hidden border border-white/20 hover:border-orange-400/50 transition-all duration-300 hover:transform hover:scale-[1.02]"
+                  className="bg-white/10 backdrop-blur-sm rounded-xl md:rounded-2xl overflow-hidden border border-white/10 hover:border-orange-400/50 transition-all duration-300 group"
                 >
-                  <div className="menu-image">
+                  <div className="relative aspect-square overflow-hidden">
                     <Image
                       src={item.image}
                       alt={item.name}
-                      width={400}
-                      height={400}
-                      className="object-cover"
+                      fill
+                      className="object-cover group-hover:scale-110 transition-transform duration-500"
                     />
-                    <div className="absolute top-3 right-3 bg-orange-600 text-white px-3 py-1 rounded-full text-sm font-semibold">
+                    <div className="absolute top-2 right-2 md:top-3 md:right-3 bg-orange-600 text-white px-2 py-0.5 md:px-3 md:py-1 rounded-full text-[10px] md:text-sm font-bold shadow-lg">
                       Rp {item.amount.toLocaleString()}
                     </div>
                   </div>
                   
-                  <div className="p-4">
-                    <h2 className="text-xl font-bold text-white mb-2">{item.name}</h2>
-                    <p className="text-gray-300 text-sm mb-4 line-clamp-2">{item.description}</p>
+                  <div className="p-3 md:p-4">
+                    <h2 className="text-sm md:text-xl font-bold text-white mb-1 truncate">{item.name}</h2>
+                    <p className="text-gray-400 text-[10px] md:text-sm mb-3 line-clamp-1 md:line-clamp-2">{item.description}</p>
                     
                     <div className="flex items-center justify-between">
                       {cart.some((cartItem) => cartItem.id === item.id) ? (
-                        <div className="flex items-center bg-orange-600 rounded-lg overflow-hidden">
+                        <div className="flex items-center bg-orange-600 rounded-lg md:rounded-xl overflow-hidden w-full">
                           <button
                             onClick={() => handleDecrement(item)}
-                            className="px-4 py-2 hover:bg-orange-700 transition-colors text-white"
+                            className="flex-1 py-1.5 md:py-3 hover:bg-orange-700 transition-colors text-white flex justify-center"
                           >
-                            <FaMinus />
+                            <FaMinus size={8} className="md:w-3 md:h-3" />
                           </button>
-                          <span className="px-4 py-2 bg-orange-500 text-white font-semibold min-w-[3rem] text-center">
+                          <span className="flex-1 py-1.5 md:py-3 bg-orange-500 text-white font-bold text-center text-xs md:text-base">
                             {cart.find((cartItem) => cartItem.id === item.id)?.quantity || 0}
                           </span>
                           <button
                             onClick={() => handleIncrement(item)}
-                            className="px-4 py-2 hover:bg-orange-700 transition-colors text-white"
+                            className="flex-1 py-1.5 md:py-3 hover:bg-orange-700 transition-colors text-white flex justify-center"
                           >
-                            <FaPlus />
+                            <FaPlus size={8} className="md:w-3 md:h-3" />
                           </button>
                         </div>
                       ) : (
                         <button
                           onClick={() => handleCart(item)}
-                          className="flex-1 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white px-4 py-3 rounded-lg transition-all duration-300 font-semibold transform hover:scale-105 flex items-center justify-center"
+                          className="w-full bg-white/10 hover:bg-orange-600 text-white py-2 md:py-3 rounded-lg md:rounded-xl transition-all duration-300 font-bold border border-white/10 hover:border-orange-500 flex items-center justify-center gap-1 md:gap-2 group-hover:bg-orange-600 text-[10px] md:text-sm"
                         >
-                          <FaPlus className="mr-2" size={14} />
-                          Tambah ke Keranjang
+                          <FaPlus size={10} className="md:w-3 md:h-3" />
+                          <span>Tambah</span>
                         </button>
                       )}
                     </div>
@@ -231,85 +200,72 @@ export default function Order() {
         )}
       </main>
 
-      {/* Floating Cart Button for Mobile */}
-      {cartItemCount > 0 && (
-        <div className="fixed bottom-4 right-4 z-50 md:hidden">
-          <button 
-            onClick={() => setShowCart(true)}
-            className="bg-orange-600 hover:bg-orange-700 text-white p-4 rounded-full shadow-lg transition-colors relative"
-          >
-            <FaShoppingCart size={24} />
-            <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center">
-              {cartItemCount}
-            </span>
-          </button>
-        </div>
-      )}
-
-      {/* Cart Modal */}
+      {/* Desktop Cart Modal */}
       {showCart && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-end md:items-center justify-center">
-          <div className="bg-gray-900 border border-gray-700 w-full max-w-md max-h-[90vh] rounded-t-3xl md:rounded-3xl overflow-hidden">
-            <div className="flex justify-between items-center p-4 border-b border-gray-700">
+        <div className="hidden md:flex fixed inset-0 bg-black/80 backdrop-blur-md z-[200] items-center justify-center animate-fade-in">
+          <div className="bg-white/5 backdrop-blur-3xl border border-white/20 w-full max-w-md max-h-[90vh] rounded-3xl flex flex-col overflow-hidden shadow-2xl">
+            <div className="flex justify-between items-center p-6 border-b border-white/10">
               <h2 className="text-xl font-bold text-white">Keranjang Belanja</h2>
               <button 
                 onClick={() => setShowCart(false)}
-                className="p-2 hover:bg-gray-800 rounded-full text-gray-400 hover:text-white transition-colors"
+                className="p-2 hover:bg-white/10 rounded-full text-gray-400 hover:text-white transition-colors"
               >
                 <FaTimes />
               </button>
             </div>
             
-            <div className="p-4 max-h-96 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
               {cart.length === 0 ? (
-                <div className="text-center py-8 text-gray-400">
-                  <FaShoppingCart className="mx-auto mb-4 text-4xl" />
+                <div className="text-center py-12 text-gray-400">
+                  <FaShoppingCart className="mx-auto mb-4 text-5xl opacity-20" />
                   <p>Keranjang belanja kosong</p>
                 </div>
               ) : (
-                cart.map((item) => (
-                  <div key={item.id} className="flex items-center justify-between py-3 border-b border-gray-700 last:border-b-0">
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-white">{item.name}</h3>
-                      <p className="text-gray-400 text-sm">Rp {item.amount.toLocaleString()}</p>
+                <div className="space-y-4">
+                  {cart.map((item) => (
+                    <div key={item.id} className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5">
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-white">{item.name}</h3>
+                        <p className="text-orange-500 text-sm font-bold">Rp {item.amount.toLocaleString()}</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => handleDecrement(item)}
+                          className="w-8 h-8 bg-white/10 hover:bg-white/20 rounded-lg flex items-center justify-center text-white transition-colors"
+                        >
+                          <FaMinus size={10} />
+                        </button>
+                        <span className="w-6 text-center font-bold text-white">{item.quantity}</span>
+                        <button
+                          onClick={() => handleIncrement(item)}
+                          className="w-8 h-8 bg-orange-600 hover:bg-orange-700 rounded-lg flex items-center justify-center text-white transition-colors"
+                        >
+                          <FaPlus size={10} />
+                        </button>
+                        <button
+                          onClick={() => removeFromCart(item.id)}
+                          className="ml-2 text-white/20 hover:text-red-500 transition-colors"
+                        >
+                          <FaTimes />
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleDecrement(item)}
-                        className="w-8 h-8 bg-gray-700 hover:bg-gray-600 rounded-full flex items-center justify-center text-white transition-colors"
-                      >
-                        <FaMinus size={12} />
-                      </button>
-                      <span className="w-8 text-center font-semibold text-white">{item.quantity}</span>
-                      <button
-                        onClick={() => handleIncrement(item)}
-                        className="w-8 h-8 bg-orange-600 hover:bg-orange-700 rounded-full flex items-center justify-center text-white transition-colors"
-                      >
-                        <FaPlus size={12} />
-                      </button>
-                      <button
-                        onClick={() => removeFromCart(item.id)}
-                        className="ml-2 text-red-400 hover:text-red-300 transition-colors"
-                      >
-                        <FaTimes />
-                      </button>
-                    </div>
-                  </div>
-                ))
+                  ))}
+                </div>
               )}
             </div>
             
             {cart.length > 0 && (
-              <div className="p-4 border-t border-gray-700 bg-gray-800">
-                <div className="flex justify-between items-center mb-4">
-                  <span className="text-lg font-bold text-white">Total:</span>
-                  <span className="text-xl font-bold text-orange-400">
+              <div className="p-6 border-t border-white/10 bg-black/40">
+                <div className="flex justify-between items-center mb-6">
+                  <span className="text-white/60 font-medium">Total Pembayaran</span>
+                  <span className="text-2xl font-bold text-orange-500">
                     Rp {total.toLocaleString()}
                   </span>
                 </div>
                 <button
                   onClick={handleContinue}
-                  className="w-full bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white py-3 rounded-lg font-semibold transition-all duration-300"
+                  className="w-full bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white py-4 rounded-2xl font-bold text-lg shadow-xl shadow-orange-600/20 transition-all active:scale-95"
                 >
                   Lanjutkan Pemesanan
                 </button>
@@ -318,6 +274,7 @@ export default function Order() {
           </div>
         </div>
       )}
+
     </div>
   );
 }

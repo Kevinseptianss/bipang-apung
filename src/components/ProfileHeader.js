@@ -110,33 +110,33 @@ const ProfileHeader = () => {
       {showDropdown && (
         <div 
           ref={dropdownRef}
-          className="fixed w-48 bg-gray-900 border border-gray-700 rounded-lg shadow-2xl z-[99999] backdrop-blur-sm"
+          className="fixed w-48 bg-white/5 border border-white/20 rounded-xl shadow-2xl z-[99999] backdrop-blur-3xl overflow-hidden animate-fade-in"
           style={{ 
             top: `${dropdownPosition.top}px`, 
             right: `${dropdownPosition.right}px` 
           }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="p-3 border-b border-gray-700">
-            <p className="text-white text-sm font-medium">
+          <div className="p-4 border-b border-white/10 bg-white/5">
+            <p className="text-white text-sm font-bold">
               {user.displayName || "User"}
             </p>
-            <p className="text-gray-400 text-xs">{user.email}</p>
+            <p className="text-white/40 text-[10px] truncate">{user.email}</p>
           </div>
-          <div className="py-2">
+          <div className="py-1">
             <Link
               href="/profile"
               onClick={handleProfileClick}
-              className="flex items-center px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-800 transition-colors text-sm w-full text-left cursor-pointer"
+              className="flex items-center px-4 py-3 text-gray-300 hover:text-white hover:bg-white/10 transition-all text-sm w-full text-left cursor-pointer"
             >
-              <FaUser className="mr-2" size={14} />
+              <FaUser className="mr-2" size={12} />
               Profil & Riwayat
             </Link>
             <button
               onClick={handleSignOut}
-              className="flex items-center w-full px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-800 transition-colors text-sm text-left cursor-pointer"
+              className="flex items-center w-full px-4 py-3 text-gray-300 hover:text-white hover:bg-white/10 transition-all text-sm text-left cursor-pointer border-t border-white/5"
             >
-              <FaSignOutAlt className="mr-2" size={14} />
+              <FaSignOutAlt className="mr-2" size={12} />
               Keluar
             </button>
           </div>

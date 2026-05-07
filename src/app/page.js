@@ -16,7 +16,7 @@ export default function Home() {
           src={bg} 
           alt="background" 
           fill
-          className="object-cover"
+          className="object-cover blur-[6px] scale-105 opacity-80"
           priority
         />
         <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/70 to-black/80" />
@@ -34,8 +34,8 @@ export default function Home() {
           />
         </div>
         
-        {/* Profile - Fixed position top right */}
-        <div className="absolute top-4 right-4 md:top-6 md:right-6 z-[99999]">
+        {/* Profile - Fixed position top right - Desktop only */}
+        <div className="absolute top-4 right-4 md:top-6 md:right-6 z-[99999] hidden md:block">
           <ProfileHeader />
         </div>
       </header>
