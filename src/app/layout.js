@@ -4,6 +4,7 @@ import "leaflet/dist/leaflet.css";
 import { Analytics } from "@vercel/analytics/react"
 import MobileNavbar from "@/components/MobileNavbar";
 import Script from "next/script";
+import { Suspense } from "react";
 
 const roboto = Roboto({
   weight: '400', // You can specify the weight you need
@@ -56,7 +57,9 @@ export default function RootLayout({ children }) {
         <div className="pb-24 md:pb-0">
           {children}
         </div>
-        <MobileNavbar />
+        <Suspense fallback={null}>
+          <MobileNavbar />
+        </Suspense>
         <Analytics />
       </body>
     </html>
