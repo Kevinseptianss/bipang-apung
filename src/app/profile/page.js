@@ -235,7 +235,31 @@ export default function Profile() {
                         </div>
 
                         <div className="mt-5 pt-4 border-t border-white/5 flex gap-3">
-                          {order.status === 'success' && (
+                          {order.status === 'pending' && (order.payment?.payment_url || order.payment?.snap_token) && (
+                            <button 
+                              onClick={() => {
+                                if (window.snap && order.payment.snap_token) {
+                                  window.snap.pay(order.payment.snap_token, {
+                                    onSuccess: () => fetchTransactions(user.uid),
+                                    onPending: () => fetchTransactions(user.uid),
+                                    onClose: () => fetchTransactions(user.uid)
+                                  });
+                                } else {
+                                  // Fallback for old orders without token
+                                  const url = order.payment.payment_url;
+                                  // Simple domain replacement if it's a sandbox link (as requested)
+                                  const prodUrl = url?.replace('app.sandbox.midtrans.com', 'app.midtrans.com');
+                                  window.open(prodUrl || url, '_blank');
+                                }
+                              }}
+                              className="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-2xl text-xs font-bold shadow-[0_4px_15px_rgba(249,115,22,0.3)] flex items-center justify-center gap-2 transition-all transform active:scale-95"
+                            >
+                              Bayar Sekarang
+                              <FaChevronRight size={10} />
+                            </button>
+                          )}
+                          
+                          {order.status !== 'pending' && (
                             <button 
                               onClick={() => {
                                 const msg = `Halo Bipang Apung, saya ingin tanya pesanan #${order.order_id}`;
@@ -247,10 +271,14 @@ export default function Profile() {
                               Bantuan
                             </button>
                           )}
-                          <button className="flex-1 bg-white/5 hover:bg-white/10 text-white/60 py-3 rounded-2xl text-xs font-bold border border-white/5 flex items-center justify-center gap-2 transition-colors">
+
+                          <Link 
+                            href={`/cekorder/${order.order_id}`}
+                            className="flex-1 bg-white/5 hover:bg-white/10 text-white/60 py-3 rounded-2xl text-xs font-bold border border-white/5 flex items-center justify-center gap-2 transition-colors"
+                          >
                             Detail Pesanan
                             <FaChevronRight size={10} />
-                          </button>
+                          </Link>
                         </div>
                       </div>
                     ))}

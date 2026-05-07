@@ -3,6 +3,7 @@ import "./globals.css";
 import "leaflet/dist/leaflet.css";
 import { Analytics } from "@vercel/analytics/react"
 import MobileNavbar from "@/components/MobileNavbar";
+import Script from "next/script";
 
 const roboto = Roboto({
   weight: '400', // You can specify the weight you need
@@ -47,6 +48,11 @@ export default function RootLayout({ children }) {
       <body
         className={`${roboto.variable} ${robotoMono.variable} antialiased`}
       >
+        <Script 
+          src="https://app.midtrans.com/snap/snap.js" 
+          data-client-key={process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY}
+          strategy="afterInteractive" 
+        />
         <div className="pb-24 md:pb-0">
           {children}
         </div>

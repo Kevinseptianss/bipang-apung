@@ -139,11 +139,13 @@ export async function POST(request) {
     
     // Save complete order data to Firebase
     orderData.payment.payment_url = transaction.redirect_url;
+    orderData.payment.snap_token = transaction.token;
     await db.collection("orders").doc(order_id).set(orderData);
 
     sendWhatsApp(message, waPhone);
 
     return Response.json({
+      token: transaction.token,
       paymentUrl: transaction.redirect_url,
       success: true,
       orderId: order_id

@@ -3,11 +3,14 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 import Image from "next/image";
 import bg from "@/assets/bg.png";
-import { FaArrowLeft, FaUser, FaMapMarkerAlt, FaPhone, FaStickyNote, FaCalendarAlt, FaTruck, FaSpinner, FaStore, FaClock, FaGoogle, FaSignOutAlt, FaLock, FaMap } from "react-icons/fa";
-import { auth, googleProvider } from "@/config/firebase";
+import { FaArrowLeft, FaUser, FaMapMarkerAlt, FaPhone, FaStickyNote, FaCalendarAlt, FaTruck, FaSpinner, FaStore, FaClock, FaGoogle, FaSignOutAlt, FaLock, FaMap, FaCheckCircle, FaSync } from "react-icons/fa";
+import { auth, googleProvider, db } from "@/config/firebase";
 import { signInWithPopup, signOut, onAuthStateChanged } from "firebase/auth";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 import ProfileHeader from "@/components/ProfileHeader";
 import dynamic from "next/dynamic";
+import PremiumDatePicker from "@/components/PremiumDatePicker";
+import PremiumTimePicker from "@/components/PremiumTimePicker";
 
 const MapPicker = dynamic(() => import("@/components/MapPicker"), { 
   ssr: false,
@@ -15,10 +18,43 @@ const MapPicker = dynamic(() => import("@/components/MapPicker"), {
 });
 
 export default function Details() {
-  // Set minimum order date to H+1 (tomorrow)
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const tomorrowFormatted = tomorrow.toISOString().split("T")[0];
+  // Shop coordinates (6°59'38.2"S 110°27'43.2"E)
+  const SHOP_COORDS = { lat: -6.993944, lng: 110.462 };
+
+  const calculateLocalShippingFee = (jarakKm) => {
+    const tarifMin = 15000; // Batas aman minimum
+    const kmMin = 4;
+    const tarifPerKm = 3500; // Batas aman per km
+
+    if (jarakKm <= kmMin) {
+      return tarifMin;
+    } else {
+      const sisaJarak = jarakKm - kmMin;
+      return tarifMin + Math.ceil(sisaJarak * tarifPerKm);
+    }
+  };
+
+  const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371; // Radius of the earth in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c; // Distance in km
+  };
+  // Set minimum order date based on time cutoff (12:00 PM)
+  const now = new Date();
+  const currentHour = now.getHours();
+  
+  // If order is after 12:00 PM (Noon), minimum is H+2, else H+1
+  const minDays = currentHour >= 12 ? 2 : 1;
+  
+  const minDate = new Date();
+  minDate.setDate(minDate.getDate() + minDays);
+  const tomorrowFormatted = minDate.toISOString().split("T")[0];
 
   const [cart, setCart] = useState([]);
   const [total, setTotal] = useState(0);
@@ -31,7 +67,7 @@ export default function Details() {
     phone: "",
     note: "",
     date: tomorrowFormatted,
-    time: "10:00", // Default time
+    time: "10:00",
     deliveryMethod: "Di Ambil di Toko",
     paymentMethod: "Pembayaran Online", // Always online payment
   });
@@ -68,22 +104,53 @@ export default function Details() {
       deliveryMethod: savedOrderType === "pickup" ? "Di Ambil di Toko" : "Gojek, Maxim, Shopee, Bayar di tempat ongkirnya"
     }));
 
-    // Listen for authentication state changes
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        setUser(user);
-        // Auto-fill name if available
-        setFormData(prev => ({
-          ...prev,
-          name: prev.name || user.displayName || ""
-        }));
+    // Listen for authentication state changes and fetch profile
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        setUser(firebaseUser);
+        
+        try {
+          const docRef = doc(db, "users", firebaseUser.uid);
+          const docSnap = await getDoc(docRef);
+          
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            setFormData(prev => ({
+              ...prev,
+              name: data.name || firebaseUser.displayName || "",
+              phone: data.phone || "",
+              address: data.address || "",
+              note: data.note || ""
+            }));
+            
+            if (data.coords && savedOrderType === "delivery") {
+              setSelectedCoords(data.coords);
+              const dist = calculateDistance(SHOP_COORDS.lat, SHOP_COORDS.lng, data.coords.lat, data.coords.lng);
+              setDistance(dist.toFixed(1));
+              const fee = calculateLocalShippingFee(dist);
+              setSelectedRate({
+                company: "Kurir Toko",
+                type: "Delivery",
+                price: fee,
+                duration: "Estimasi 30-60 menit"
+              });
+            }
+          } else {
+            setFormData(prev => ({
+              ...prev,
+              name: firebaseUser.displayName || ""
+            }));
+          }
+        } catch (err) {
+          console.error("Error fetching user profile:", err);
+        }
       } else {
         setUser(null);
       }
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [orderType]);
 
   const handleGoogleSignIn = async () => {
     try {
@@ -106,10 +173,32 @@ export default function Details() {
 
   const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [showMap, setShowMap] = useState(false);
+  const [distance, setDistance] = useState(null);
+  const [selectedCoords, setSelectedCoords] = useState(null);
+  const [shippingRates, setShippingRates] = useState([]);
+  const [loadingRates, setLoadingRates] = useState(false);
+  const [selectedRate, setSelectedRate] = useState(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
 
   const handleMapSelect = async (lat, lng) => {
     setShowMap(false);
     setIsGettingLocation(true);
+    setSelectedCoords({ lat, lng });
+    
+    // Calculate distance
+    const dist = calculateDistance(SHOP_COORDS.lat, SHOP_COORDS.lng, lat, lng);
+    setDistance(dist.toFixed(1));
+
+    // Calculate Local Shipping Fee
+    const fee = calculateLocalShippingFee(parseFloat(dist));
+    setSelectedRate({
+      company: "Kurir Toko",
+      type: "Delivery",
+      price: fee,
+      duration: "Estimasi 30-60 menit"
+    });
+
     try {
       const response = await axios.get(
         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`
@@ -121,7 +210,7 @@ export default function Details() {
         }));
       }
     } catch (err) {
-      setError("Gagal mendapatkan alamat dari peta. Silakan masukkan manual.");
+      setError("Gagal mendapatkan alamat dari peta. Silakan coba lagi.");
     } finally {
       setIsGettingLocation(false);
     }
@@ -138,8 +227,23 @@ export default function Details() {
 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
+        const { latitude, longitude } = position.coords;
+        setSelectedCoords({ lat: latitude, lng: longitude });
+        
+        // Calculate distance
+        const dist = calculateDistance(SHOP_COORDS.lat, SHOP_COORDS.lng, latitude, longitude);
+        setDistance(dist.toFixed(1));
+
+        // Calculate Local Shipping Fee
+        const fee = calculateLocalShippingFee(parseFloat(dist));
+        setSelectedRate({
+          company: "Kurir Toko",
+          type: "Delivery",
+          price: fee,
+          duration: "Estimasi 30-60 menit"
+        });
+
         try {
-          const { latitude, longitude } = position.coords;
           const response = await axios.get(
             `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
           );
@@ -150,11 +254,11 @@ export default function Details() {
               address: response.data.display_name
             }));
           } else {
-            setError("Gagal mendapatkan detail alamat. Silakan masukkan manual.");
+            setError("Gagal mendapatkan detail alamat. Silakan gunakan peta.");
           }
         } catch (err) {
           console.error("Geocoding error:", err);
-          setError("Gagal mendapatkan alamat. Silakan masukkan manual.");
+          setError("Gagal mendapatkan alamat. Silakan gunakan peta.");
         } finally {
           setIsGettingLocation(false);
         }
@@ -162,7 +266,11 @@ export default function Details() {
       (err) => {
         console.error("Geolocation error:", err);
         setIsGettingLocation(false);
-        setError("Izin lokasi ditolak atau tidak tersedia.");
+        if (err.code === 1) { // PERMISSION_DENIED
+          setError("Izin lokasi diblokir. Klik ikon gembok (lock) di samping alamat browser Anda dan pilih 'Izinkan' (Allow) untuk menggunakan fitur ini.");
+        } else {
+          setError("Izin lokasi ditolak atau tidak tersedia. Silakan gunakan tombol 'Peta' untuk memilih manual.");
+        }
       }
     );
   };
@@ -214,15 +322,46 @@ export default function Details() {
       };
 
       const response = await axios.post("/api/createTransaction", orderData);
-
+      
       if (response.data.success) {
+        // Save/Update User Profile in Firestore
+        try {
+          await setDoc(doc(db, "users", user.uid), {
+            name: formData.name,
+            phone: formData.phone,
+            address: orderType === "delivery" ? formData.address : "",
+            note: formData.note,
+            coords: selectedCoords,
+            lastUpdated: new Date().toISOString()
+          }, { merge: true });
+        } catch (profileErr) {
+          console.error("Error saving profile:", profileErr);
+          // Don't block the transaction success even if profile save fails
+        }
+
         setSuccess(true);
         console.log(response.data);
         localStorage.removeItem("cart");
         localStorage.removeItem("orderType");
 
-        // Always redirect to Midtrans payment
-        if (response.data.paymentUrl) {
+        // Always prioritize Snap Popup if script is loaded
+        if (window.snap && response.data.token) {
+          window.snap.pay(response.data.token, {
+            onSuccess: function(result) {
+              window.location.href = `/cekorder/${response.data.orderId}`;
+            },
+            onPending: function(result) {
+              window.location.href = `/cekorder/${response.data.orderId}`;
+            },
+            onError: function(result) {
+              console.error("Payment error:", result);
+            },
+            onClose: function() {
+              window.location.href = `/cekorder/${response.data.orderId}`;
+            }
+          });
+        } else if (response.data.paymentUrl) {
+          // Fallback to redirect
           window.location.href = response.data.paymentUrl;
         } else {
           setError("Gagal membuat link pembayaran");
@@ -405,10 +544,49 @@ export default function Details() {
                     value={formData.address}
                     onChange={handleChange}
                     rows="3"
-                    className="w-full border border-white/30 rounded-lg p-3 bg-white/5 text-white placeholder-gray-400 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-400/20 transition-all resize-none"
-                    placeholder="Masukkan alamat lengkap untuk pengiriman"
+                    readOnly={orderType === "delivery"}
+                    className={`w-full border border-white/30 rounded-lg p-3 bg-white/5 text-white placeholder-gray-400 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-400/20 transition-all resize-none ${orderType === "delivery" ? "cursor-not-allowed opacity-80" : ""}`}
+                    placeholder={orderType === "delivery" ? "Gunakan Pinpoint/Peta untuk mengisi alamat" : "Masukkan alamat lengkap"}
                     required={orderType === "delivery"}
                   />
+                  {distance && (
+                    <p className="text-[10px] text-green-400 mt-2 flex items-center gap-1 px-1">
+                      <FaCheckCircle size={10} />
+                      Terdeteksi: {distance} KM dari lokasi toko
+                    </p>
+                  )}
+
+                  {/* Shipping Rates Selection - Automatic Display */}
+                  {orderType === "delivery" && (
+                    <div className="mt-6 space-y-4">
+                      <label className="flex items-center text-white text-sm font-semibold">
+                        <FaTruck className="mr-2 text-orange-400" />
+                        Layanan Pengiriman
+                      </label>
+                      
+                      {selectedRate ? (
+                        <div className="bg-orange-500/10 border border-orange-500/30 p-4 rounded-2xl flex justify-between items-center">
+                          <div className="flex flex-col">
+                            <span className="text-xs font-bold uppercase tracking-wider text-white">
+                              {selectedRate.company} ({selectedRate.type})
+                            </span>
+                            <span className="text-[10px] text-gray-400">
+                              {selectedRate.duration}
+                            </span>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm font-bold text-orange-400">
+                              Rp {selectedRate.price.toLocaleString()}
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="p-4 bg-white/5 rounded-2xl border border-white/10 text-center">
+                          <p className="text-[10px] text-gray-400 italic">Pilih lokasi terlebih dahulu untuk menghitung ongkir secara otomatis.</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -445,13 +623,13 @@ export default function Details() {
                 />
               </div>
 
-              {/* Delivery Method - Conditional based on order type */}
-              <div>
-                <label className="flex items-center text-white text-sm font-semibold mb-2">
-                  <FaTruck className="mr-2 text-orange-400" />
-                  {orderType === "pickup" ? "Konfirmasi Pengambilan" : "Metode Pengiriman"}
-                </label>
-                {orderType === "pickup" ? (
+              {/* Delivery Method - Hidden for delivery type since we use rates, but keep logic */}
+              {orderType === "pickup" && (
+                <div>
+                  <label className="flex items-center text-white text-sm font-semibold mb-2">
+                    <FaTruck className="mr-2 text-orange-400" />
+                    Konfirmasi Pengambilan
+                  </label>
                   <div className="w-full border border-white/30 rounded-lg p-3 bg-white/5 text-white">
                     <div className="flex items-center">
                       <FaStore className="mr-2 text-orange-400" />
@@ -466,17 +644,8 @@ export default function Details() {
                       Jam buka: 11:00 - 21:00
                     </p>
                   </div>
-                ) : (
-                  <select
-                    name="deliveryMethod"
-                    value={formData.deliveryMethod}
-                    onChange={handleChange}
-                    className="w-full border border-white/30 rounded-lg p-3 bg-white/5 text-white focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-400/20 transition-all"
-                  >
-                    <option value="Gojek, Maxim, Shopee, Bayar di tempat ongkirnya" className="bg-gray-800">Delivery Service (Gojek/Maxim/Shopee)</option>
-                  </select>
-                )}
-              </div>
+                </div>
+              )}
 
               {/* Delivery Date */}
               <div>
@@ -484,19 +653,38 @@ export default function Details() {
                   <FaCalendarAlt className="mr-2 text-orange-400" />
                   Tanggal {orderType === "pickup" ? "Pengambilan" : "Pengiriman"}
                 </label>
-                <input
-                  type="date"
-                  name="date"
-                  value={formData.date}
-                  onChange={handleChange}
-                  min={tomorrowFormatted}
-                  className="w-full border border-white/30 rounded-lg p-3 bg-white/5 text-white focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-400/20 transition-all"
-                  required
-                />
+                
+                <button
+                  type="button"
+                  onClick={() => setShowDatePicker(true)}
+                  className="w-full flex items-center justify-between border border-white/30 rounded-lg p-3 bg-white/5 text-white hover:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-400/20 transition-all text-left"
+                >
+                  <span className="font-medium">
+                    {new Date(formData.date).toLocaleDateString('id-ID', { 
+                      weekday: 'long', 
+                      day: 'numeric', 
+                      month: 'long', 
+                      year: 'numeric' 
+                    })}
+                  </span>
+                  <FaCalendarAlt className="text-gray-400" size={14} />
+                </button>
+                
                 <p className="text-sm text-gray-400 mt-1">
-                  Minimal pemesanan H+1 (besok: {new Date(tomorrowFormatted).toLocaleDateString('id-ID')})
+                  Minimal pemesanan H+{minDays} ({minDays === 1 ? "Besok" : "Lusa"}: {new Date(tomorrowFormatted).toLocaleDateString('id-ID')})
                 </p>
               </div>
+
+              {showDatePicker && (
+                <PremiumDatePicker
+                  value={formData.date}
+                  minDate={tomorrowFormatted}
+                  onChange={(newDate) => {
+                    setFormData(prev => ({ ...prev, date: newDate }));
+                  }}
+                  onClose={() => setShowDatePicker(false)}
+                />
+              )}
 
               {/* Time Selection */}
               <div>
@@ -504,31 +692,43 @@ export default function Details() {
                   <FaClock className="mr-2 text-orange-400" />
                   Waktu {orderType === "pickup" ? "Pengambilan" : "Pengiriman"}
                 </label>
-                <select
-                  name="time"
-                  value={formData.time}
-                  onChange={handleChange}
-                  className="w-full border border-white/30 rounded-lg p-3 bg-white/5 text-white focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-400/20 transition-all"
-                  required
+                
+                <button
+                  type="button"
+                  onClick={() => setShowTimePicker(true)}
+                  className="w-full flex items-center justify-between border border-white/30 rounded-lg p-3 bg-white/5 text-white hover:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-400/20 transition-all text-left"
                 >
-                  {timeSlots.map((time) => (
-                    <option key={time} value={time} className="bg-gray-800">
-                      {time} WIB
-                    </option>
-                  ))}
-                </select>
-                <p className="text-sm text-gray-400 mt-1">
-                  {orderType === "pickup" 
-                    ? "Pilih waktu yang sesuai untuk mengambil pesanan di toko"
-                    : "Pilih waktu yang diinginkan untuk pengiriman"
-                  }
-                </p>
+                  <span className="font-medium">
+                    {formData.time === "10:00" ? "10:00 AM WIB" : 
+                     formData.time === "12:00" ? "12:00 PM WIB" : 
+                     formData.time === "17:00" ? "05:00 PM WIB" : 
+                     formData.time === "19:00" ? "07:00 PM WIB" : formData.time}
+                  </span>
+                  <FaClock className="text-gray-400" size={14} />
+                </button>
               </div>
+
+              {showTimePicker && (
+                <PremiumTimePicker
+                  value={formData.time}
+                  onChange={(newTime) => {
+                    setFormData(prev => ({ ...prev, time: newTime }));
+                  }}
+                  onClose={() => setShowTimePicker(false)}
+                />
+              )}
+
+              <p className="text-sm text-gray-400 mt-1">
+                {orderType === "pickup" 
+                  ? "Pilih waktu yang sesuai untuk mengambil pesanan di toko"
+                  : "Pilih waktu yang diinginkan untuk pengiriman"
+                }
+              </p>
 
               {/* Submit Button */}
               <button
                 type="submit"
-                disabled={isSubmitting || !user}
+                disabled={isSubmitting || !user || (orderType === 'delivery' && !selectedRate)}
                 className="w-full bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 disabled:from-gray-500 disabled:to-gray-600 text-white py-4 px-6 rounded-xl font-bold text-lg shadow-lg transition-all duration-300 transform hover:scale-[1.02] disabled:scale-100 disabled:cursor-not-allowed"
               >
                 {isSubmitting ? (
@@ -538,7 +738,7 @@ export default function Details() {
                   </div>
                 ) : (
                   <div className="flex items-center justify-center">
-                    <span>Bayar Sekarang - Rp {total.toLocaleString()}</span>
+                    <span>Bayar Sekarang - Rp {(total + (selectedRate?.price || 0)).toLocaleString()}</span>
                   </div>
                 )}
               </button>
